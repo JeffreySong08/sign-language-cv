@@ -175,4 +175,4 @@ while cap.isOpened():
         sample_count = 0
 
 cap.release()
-cv2.destroyAllWindows()
+cv2.destroyAllWindows()# ASL Detector: all letters except J and Z
