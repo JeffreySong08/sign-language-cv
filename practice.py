@@ -5,38 +5,31 @@ Run:  python practice.py
   - The screen shows a letter to make, e.g. "Make: B".
   - Hold the sign steady. When the app sees that letter 10 frames in a row,
     it shows "Correct!" for 1.5 seconds and moves to the next letter.
+  - J and Z are motion letters: do the whole movement (J with your pinky,
+    Z with your index finger). These use Etinosa's motion_recognition.py.
   - Press n to skip a letter, ESC to quit.
 
-It uses every examples_*.json file in this folder (like examples_karen.json)
-that was made with the same recipe as Karen's app (features.py).
+It uses every data/examples_*.json file (Karen's, the Kaggle dataset, and
+anything recorded with collect_data.py) and the shared recipe in features.py.
 """
 
-import glob
-import json
 import random
 import time
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from features import hand_to_numbers, guess_letter, NUM_NUMBERS
+from features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
+from motion_recognition import MotionRecognizer
 
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
 
-examples = []
-for path in sorted(glob.glob("examples*.json")):
-    try:
-        with open(path) as f:
-            found = [e for e in json.load(f) if len(e.get("numbers", [])) == NUM_NUMBERS]
-    except (ValueError, AttributeError, TypeError):
-        print(f"Skipping {path}: it isn't a readable examples file")
-        continue
-    print(f"Loaded {len(found)} examples from {path}")
-    examples += found
+examples = load_all_examples()
 LETTERS = sorted({e["letter"] for e in examples})
 if not LETTERS:
-    raise SystemExit("No examples found. Record some with camera.py first.")
+    raise SystemExit("No examples found. Record some with collect_data.py first.")
+LETTERS = sorted(LETTERS + list(MOTION_LETTERS))
 print("Practicing letters:", " ".join(LETTERS))
 
 
@@ -53,6 +46,8 @@ landmarker = vision.HandLandmarker.create_from_options(
         num_hands=1,
     )
 )
+
+motion_tracker = MotionRecognizer()
 
 cap = cv2.VideoCapture(0)
 start = time.time()
@@ -78,18 +73,26 @@ while cap.isOpened():
     now = time.time()
 
     guess = None
-    if result.hand_landmarks:
-        lm = result.hand_landmarks[0]
-        for p in lm:
+    hand = result.hand_landmarks[0] if result.hand_landmarks else None
+    if hand:
+        for p in hand:
             cv2.circle(frame, (int(p.x * w), int(p.y * h)), 4, (0, 255, 0), -1)
-        guess, _ = guess_letter(hand_to_numbers(lm), examples)
+        guess, _ = guess_letter(hand_to_numbers(hand), examples)
+    # The motion tracker watches every frame for a J or Z movement
+    motion_letter = motion_tracker.update(hand, time.monotonic(), w / h)
+    if motion_letter:
+        guess = motion_letter
 
     if now < correct_until:
         # Showing "Correct!" - wait, then the next letter is already set
         cv2.putText(frame, "Correct!", (w // 2 - 150, h // 2),
                     cv2.FONT_HERSHEY_SIMPLEX, 2.5, (0, 255, 0), 6)
     else:
-        streak = streak + 1 if guess == target else 0
+        if target in MOTION_LETTERS:
+            # One finished movement is enough for J and Z
+            streak = FRAMES_NEEDED if motion_letter == target else 0
+        else:
+            streak = streak + 1 if guess == target else 0
         if streak >= FRAMES_NEEDED:
             score += 1
             streak = 0
@@ -105,6 +108,10 @@ while cap.isOpened():
         seen = guess if guess else "?"
         cv2.putText(frame, f"I see: {seen}", (20, 155),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
+        if target in MOTION_LETTERS:
+            tip = "draw a J with your pinky" if target == "J" else "draw a Z with your index finger"
+            cv2.putText(frame, f"Move: {tip}", (20, 195),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
 
     cv2.putText(frame, f"Score: {score}   n = skip   ESC = quit", (20, h - 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)

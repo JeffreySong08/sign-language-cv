@@ -1,3 +1,5 @@
 __pycache__/
 .DS_Store
-examples_backup.json
+*_backup.json
+*.zip
+*.bundle

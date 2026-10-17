@@ -1,78 +1,40 @@
+"""
+camera.py - live ASL fingerspelling classifier (by Karen; J/Z motion by Etinosa).
+
+Run:  python camera.py
+  - Show a letter and the window says what it sees. J and Z are recognized
+    from movement (motion_recognition.py).
+  - Press a letter key (not J/Z) to record 20 examples of that letter.
+    New recordings go to data/examples_camera.json.
+  - ESC quits.
+"""
+
 import os
 import json
-import math
 import time
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from motion_recognition import MotionRecognizer
+# The recipe (hand_to_numbers) and the k-NN guesser live in features.py,
+# so camera.py, practice.py and collect_data.py always agree.
+from features import hand_to_numbers, guess_letter, load_all_examples, DATA_DIR, FINGERTIPS
 
-EXAMPLES_FILE = "examples_karen.json"
+RECORD_FILE = os.path.join(DATA_DIR, "examples_camera.json")
 TARGET_SAMPLES = 20
-KNN_K = 5
-MAX_NEIGHBOR_DISTANCE = 15.0  # Squared distance cutoff for valid gestures
-
-# Fingertip landmark indices in MediaPipe: Thumb (4), Index (8), Middle (12), Ring (16), Pinky (20)
-FINGERTIPS = {4, 8, 12, 16, 20}
 
 # ----------------- Step 1: Data Persistence -----------------
-if os.path.exists(EXAMPLES_FILE):
-    with open(EXAMPLES_FILE, "r") as f:
-        examples = json.load(f)
+examples = load_all_examples()          # everything in data/, used for guessing
+if os.path.exists(RECORD_FILE):
+    with open(RECORD_FILE, "r") as f:
+        recorded = json.load(f)         # only what this app recorded
 else:
-    examples = []
+    recorded = []
 
 def save_examples():
-    with open(EXAMPLES_FILE, "w") as f:
-        json.dump(examples, f, indent=2)
-
-# ----------------- Step 2: Weighted 2D Normalization -----------------
-def hand_to_numbers(hand):
-    wrist = hand[0]
-    knuckle = hand[9]  # Base knuckle of middle finger
-    size = math.hypot(knuckle.x - wrist.x, knuckle.y - wrist.y) or 1e-6
-    numbers = []
-    
-    for idx, dot in enumerate(hand):
-        # Weight fingertips higher so finger configurations dominate palm geometry
-        weight = 2.5 if idx in FINGERTIPS else 1.0
-        numbers.append(((dot.x - wrist.x) / size) * weight)
-        numbers.append(((dot.y - wrist.y) / size) * weight)
-        # Depth (z) is excluded to eliminate camera-inferred jitter
-    return numbers  # 42 weighted normalized numbers
-
-# ----------------- Step 3: k-NN Multi-Class Classification -----------------
-def guess_letter(numbers, k=KNN_K):
-    if not examples:
-        return None, 0.0
-
-    distances = []
-    for item in examples:
-        saved_numbers = item["numbers"]
-        # Skip legacy 63-element vectors if switching formats
-        if len(saved_numbers) != len(numbers):
-            continue
-        dist = sum((a - b) ** 2 for a, b in zip(numbers, saved_numbers))
-        distances.append((dist, item["letter"]))
-
-    if not distances:
-        return None, 0.0
-
-    distances.sort(key=lambda x: x[0])
-    top_k = distances[:k]
-
-    # Reject gesture if the best match exceeds distance ceiling
-    if top_k[0][0] > MAX_NEIGHBOR_DISTANCE:
-        return None, 0.0
-
-    # Count votes among k neighbors
-    votes = {}
-    for _, letter in top_k:
-        votes[letter] = votes.get(letter, 0) + 1
-
-    predicted_letter = max(votes, key=votes.get)
-    confidence = votes[predicted_letter] / len(top_k)
-    return predicted_letter, confidence
+    with open(RECORD_FILE, "w") as f:
+        json.dump(recorded, f, indent=2)
 
 # ----------------- Step 4: MediaPipe Setup -----------------
 base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
@@ -101,6 +63,7 @@ last_timestamp_ms = 0
 
 active_letter = None
 sample_count = 0
+motion_tracker = MotionRecognizer()
 
 # ----------------- Step 5: Video Inference Loop -----------------
 while cap.isOpened():
@@ -118,6 +81,10 @@ while cap.isOpened():
 
     result = landmarker.detect_for_video(mp_image, current_timestamp_ms)
     h, w = frame.shape[:2]
+    hand = result.hand_landmarks[0] if result.hand_landmarks else None
+    motion_letter = motion_tracker.update(
+        hand if not active_letter else None, time.monotonic(), w / h
+    )
 
     if result.hand_landmarks:
         lm = result.hand_landmarks[0]
@@ -137,9 +104,13 @@ while cap.isOpened():
 
         # Real-time Prediction
         if not active_letter:
-            predicted, conf = guess_letter(numbers)
-            if predicted:
+            predicted, conf = guess_letter(numbers, examples)
+            if motion_letter:
+                predicted = motion_letter
+                display_text = f"Sign: {predicted} (motion)"
+            elif predicted:
                 display_text = f"Sign: {predicted} ({int(conf * 100)}%)"
+            if predicted:
                 cv2.putText(frame, display_text, (20, 60),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3)
             else:
@@ -149,6 +120,7 @@ while cap.isOpened():
         # Recording Phase
         if active_letter and sample_count < TARGET_SAMPLES:
             examples.append({"letter": active_letter, "numbers": numbers})
+            recorded.append({"letter": active_letter, "numbers": numbers})
             sample_count += 1
             if sample_count >= TARGET_SAMPLES:
                 save_examples()
@@ -167,18 +139,16 @@ while cap.isOpened():
     cv2.imshow(WINDOW_NAME, frame)
     key = cv2.waitKey(1) & 0xFF
 
-<<<<<<< Updated upstream
-    # ESC key exits, leaving 'q' free for recording
+    # ESC exits; letter keys remain available for recording.
     if key == 27:
-=======
-    if key == 27: #esc key
->>>>>>> Stashed changes
         break
     elif ord("a") <= key <= ord("z") and active_letter is None:
-        active_letter = chr(key).upper()
-        sample_count = 0
+        letter = chr(key).upper()
+        if letter in ("J", "Z"):
+            print(f"{letter} uses motion tracking, not static training. Perform the full movement.")
+        else:
+            active_letter = letter
+            sample_count = 0
 
 cap.release()
 cv2.destroyAllWindows()
-
-# ASL detector: all letters except J and Z

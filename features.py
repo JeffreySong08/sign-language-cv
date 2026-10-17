@@ -6,11 +6,15 @@ plus the letter guesser. Copied from Karen's camera.py so every script
 If Karen changes hand_to_numbers or guess_letter in camera.py,
 copy the change here too, or old and new examples won't match.
 
-  hand_to_numbers(hand)        -> 42 numbers for one hand
+  hand_to_numbers(hand)           -> 42 numbers for one hand
   guess_letter(numbers, examples) -> (letter, confidence) or (None, 0.0)
+  load_all_examples()             -> every example in data/examples_*.json
 """
 
+import glob
+import json
 import math
+import os
 
 KNN_K = 5
 MAX_NEIGHBOR_DISTANCE = 15.0  # if even the best match is further than this, say "unknown"
@@ -18,6 +22,26 @@ MAX_NEIGHBOR_DISTANCE = 15.0  # if even the best match is further than this, say
 # Fingertips: thumb (4), index (8), middle (12), ring (16), pinky (20)
 FINGERTIPS = {4, 8, 12, 16, 20}
 NUM_NUMBERS = 42  # 21 points x (x, y)
+MOTION_LETTERS = ("J", "Z")  # recognized from movement (motion_recognition.py)
+DATA_DIR = "data"            # all examples_*.json files live here
+
+
+def load_all_examples(verbose=True):
+    """Load every data/examples_*.json made with this recipe (skips broken files)."""
+    examples = []
+    for path in sorted(glob.glob(os.path.join(DATA_DIR, "examples_*.json"))):
+        try:
+            with open(path) as f:
+                found = [e for e in json.load(f)
+                         if len(e.get("numbers", [])) == NUM_NUMBERS
+                         and e.get("letter") not in MOTION_LETTERS]
+        except (ValueError, AttributeError, TypeError):
+            print(f"Skipping {path}: it isn't a readable examples file")
+            continue
+        if verbose:
+            print(f"Loaded {len(found)} examples from {path}")
+        examples += found
+    return examples
 
 
 def hand_to_numbers(hand):
@@ -38,6 +62,8 @@ def guess_letter(numbers, examples, k=KNN_K):
     """Find the k closest saved examples and let them vote on the letter."""
     distances = []
     for item in examples:
+        if item["letter"] in MOTION_LETTERS:
+            continue  # J/Z come from motion, never from a single pose
         if len(item["numbers"]) != len(numbers):
             continue  # skip examples made with an old recipe
         dist = sum((a - b) ** 2 for a, b in zip(numbers, item["numbers"]))

@@ -1,26 +1,33 @@
 """
-collect_data.py - record examples of each letter (Step 5 of the mentor's guide).
+collect_data.py - record more examples for any still letter.
 
-Run:  python collect_data.py
-  - Make a letter with your hand, then press that letter's key (a, b, c, d or e).
-    Each press saves ONE example to examples.json.
-  - Save about 20 per letter, moving your hand a little each time.
-  - Every teammate should record too, so it works for different hands.
-  - Saved a wrong one? Press x (or delete) to remove the LAST example.
-  - Press q to quit. Your examples stay saved, and running it again adds more.
+Run:  python collect_data.py jeffrey_left
+  - The name after the script picks the file: data/examples_jeffrey_left.json.
+    Use a new name for each person / hand, e.g. karen_left, jeffrey_right.
+  - Make a letter, then press its key. Each press saves ONE example.
+    Holding the key down saves several in a row.
+  - Move your hand a little between presses: turn it, tilt it, move it
+    closer and further away. Variety is what makes recognition better.
+  - Saved a wrong one? Press 1 (or delete) to remove the LAST example.
+  - Press ESC to quit. Examples stay saved; running again adds more.
+
+practice.py and camera.py automatically use every data/examples_*.json file.
+J and Z are not here: they are motion letters (see motion_recognition.py).
 """
 
 import json
 import os
+import sys
 import time
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from features import hand_to_numbers
+from features import hand_to_numbers, DATA_DIR
 
-LETTERS = "ABCDE"
-EXAMPLES_FILE = "examples.json"
+LETTERS = "ABCDEFGHIKLMNOPQRSTUVWXY"   # every letter except J and Z
+name = sys.argv[1] if len(sys.argv) > 1 else "new"
+EXAMPLES_FILE = os.path.join(DATA_DIR, f"examples_{name}.json")
 
 # ---------- Load the examples we saved last time (if any) ----------
 if os.path.exists(EXAMPLES_FILE):
@@ -28,6 +35,7 @@ if os.path.exists(EXAMPLES_FILE):
         examples = json.load(f)
 else:
     examples = []  # each one: {"letter": "A", "numbers": [42 numbers]}
+print(f"Saving to {EXAMPLES_FILE} ({len(examples)} examples so far)")
 
 
 def save_examples():
@@ -50,7 +58,8 @@ landmarker = vision.HandLandmarker.create_from_options(
 
 cap = cv2.VideoCapture(0)
 start = time.time()
-message = "Make a letter, press its key. x = undo, q = quit"
+last_timestamp_ms = 0
+message = "Make a letter, press its key. 1 = undo, ESC = quit"
 
 while cap.isOpened():
     ok, frame = cap.read()
@@ -59,7 +68,9 @@ while cap.isOpened():
     frame = cv2.flip(frame, 1)
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    result = landmarker.detect_for_video(mp_image, int((time.time() - start) * 1000))
+    timestamp_ms = max(int((time.time() - start) * 1000), last_timestamp_ms + 1)
+    last_timestamp_ms = timestamp_ms
+    result = landmarker.detect_for_video(mp_image, timestamp_ms)
     hand = result.hand_landmarks[0] if result.hand_landmarks else None
 
     if hand:
@@ -67,16 +78,18 @@ while cap.isOpened():
         for p in hand:
             cv2.circle(frame, (int(p.x * w), int(p.y * h)), 4, (0, 255, 0), -1)
 
-    # Show how many examples we have for each letter, e.g. "A:12  B:20  C:0 ..."
-    counts = "  ".join(f"{L}:{count(L)}" for L in LETTERS)
-    cv2.putText(frame, counts, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-    cv2.putText(frame, message, (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    # Counts per letter, on two lines so they fit, e.g. "A:12 B:20 C:0 ..."
+    row1 = " ".join(f"{L}:{count(L)}" for L in LETTERS[:12])
+    row2 = " ".join(f"{L}:{count(L)}" for L in LETTERS[12:])
+    cv2.putText(frame, row1, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    cv2.putText(frame, row2, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    cv2.putText(frame, message, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
     cv2.imshow("Collect Data", frame)
     key = cv2.waitKey(1) & 0xFF
-    if key == ord("q"):                      # q quits
+    if key == 27:                            # ESC quits
         break
-    if key in (ord("x"), 8, 127):            # x or delete = undo last save
+    if key in (ord("1"), 8, 127):            # 1 or delete = undo last save
         if examples:
             removed = examples.pop()
             save_examples()
@@ -84,7 +97,7 @@ while cap.isOpened():
         else:
             message = "Nothing to remove"
         print(message)
-    if key != 255 and chr(key).upper() in LETTERS:
+    elif key != 255 and chr(key).upper() in LETTERS:
         letter = chr(key).upper()
         if hand is None:
             message = "No hand found - try again"
