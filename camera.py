@@ -8,8 +8,12 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 EXAMPLES_FILE = "examples.json"
-TOO_DIFFERENT = 1.5  # Rejection threshold for unrecognized hand shapes
 TARGET_SAMPLES = 20
+KNN_K = 5
+MAX_NEIGHBOR_DISTANCE = 15.0  # Squared distance cutoff for valid gestures
+
+# Fingertip landmark indices in MediaPipe: Thumb (4), Index (8), Middle (12), Ring (16), Pinky (20)
+FINGERTIPS = {4, 8, 12, 16, 20}
 
 # ----------------- Step 1: Data Persistence -----------------
 if os.path.exists(EXAMPLES_FILE):
@@ -22,32 +26,53 @@ def save_examples():
     with open(EXAMPLES_FILE, "w") as f:
         json.dump(examples, f, indent=2)
 
-# ----------------- Step 2: Normalization -----------------
+# ----------------- Step 2: Weighted 2D Normalization -----------------
 def hand_to_numbers(hand):
     wrist = hand[0]
-    knuckle = hand[9]  # base of middle finger
+    knuckle = hand[9]  # Base knuckle of middle finger
     size = math.hypot(knuckle.x - wrist.x, knuckle.y - wrist.y) or 1e-6
     numbers = []
-    for dot in hand:
-        numbers.append((dot.x - wrist.x) / size)
-        numbers.append((dot.y - wrist.y) / size)
-        numbers.append((dot.z - wrist.z) / size)
-    return numbers  # 63 numbers
+    
+    for idx, dot in enumerate(hand):
+        # Weight fingertips higher so finger configurations dominate palm geometry
+        weight = 2.5 if idx in FINGERTIPS else 1.0
+        numbers.append(((dot.x - wrist.x) / size) * weight)
+        numbers.append(((dot.y - wrist.y) / size) * weight)
+        # Depth (z) is excluded to eliminate camera-inferred jitter
+    return numbers  # 42 weighted normalized numbers
 
-# ----------------- Step 3: Classification -----------------
-def guess_letter(numbers):
-    best_letter = None
-    smallest_difference = float("inf")
-    for example in examples:
-        difference = 0
-        for a, b in zip(numbers, example["numbers"]):
-            difference += (a - b) ** 2
-        if difference < smallest_difference:
-            smallest_difference = difference
-            best_letter = example["letter"]
-    if smallest_difference > TOO_DIFFERENT:
-        return None  # not close to anything
-    return best_letter
+# ----------------- Step 3: k-NN Multi-Class Classification -----------------
+def guess_letter(numbers, k=KNN_K):
+    if not examples:
+        return None, 0.0
+
+    distances = []
+    for item in examples:
+        saved_numbers = item["numbers"]
+        # Skip legacy 63-element vectors if switching formats
+        if len(saved_numbers) != len(numbers):
+            continue
+        dist = sum((a - b) ** 2 for a, b in zip(numbers, saved_numbers))
+        distances.append((dist, item["letter"]))
+
+    if not distances:
+        return None, 0.0
+
+    distances.sort(key=lambda x: x[0])
+    top_k = distances[:k]
+
+    # Reject gesture if the best match exceeds distance ceiling
+    if top_k[0][0] > MAX_NEIGHBOR_DISTANCE:
+        return None, 0.0
+
+    # Count votes among k neighbors
+    votes = {}
+    for _, letter in top_k:
+        votes[letter] = votes.get(letter, 0) + 1
+
+    predicted_letter = max(votes, key=votes.get)
+    confidence = votes[predicted_letter] / len(top_k)
+    return predicted_letter, confidence
 
 # ----------------- Step 4: MediaPipe Setup -----------------
 base_options = python.BaseOptions(model_asset_path="hand_landmarker.task")
@@ -67,7 +92,7 @@ HAND_CONNECTIONS = [
     (0, 17)
 ]
 
-WINDOW_NAME = "Sign Trainer"
+WINDOW_NAME = "ASL Classifier"
 cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_AUTOSIZE)
 
 cap = cv2.VideoCapture(0)
@@ -77,7 +102,7 @@ last_timestamp_ms = 0
 active_letter = None
 sample_count = 0
 
-# ----------------- Step 5: Main Loop -----------------
+# ----------------- Step 5: Video Inference Loop -----------------
 while cap.isOpened():
     ok, frame = cap.read()
     if not ok:
@@ -97,47 +122,53 @@ while cap.isOpened():
     if result.hand_landmarks:
         lm = result.hand_landmarks[0]
 
-        # Draw hand skeleton
+        # Draw bone connections
         for s_idx, e_idx in HAND_CONNECTIONS:
             p1 = (int(lm[s_idx].x * w), int(lm[s_idx].y * h))
             p2 = (int(lm[e_idx].x * w), int(lm[e_idx].y * h))
-            cv2.line(frame, p1, p2, (220, 220, 220), 2)
+            cv2.line(frame, p1, p2, (200, 200, 200), 2)
 
-        # Draw joint landmarks
-        for p in lm:
-            cv2.circle(frame, (int(p.x * w), int(p.y * h)), 4, (0, 255, 0), -1)
+        # Draw joints
+        for idx, p in enumerate(lm):
+            color = (0, 140, 255) if idx in FINGERTIPS else (0, 255, 0)
+            cv2.circle(frame, (int(p.x * w), int(p.y * h)), 5, color, -1)
 
         numbers = hand_to_numbers(lm)
 
-        # Live prediction when not recording
+        # Real-time Prediction
         if not active_letter:
-            predicted = guess_letter(numbers)
-            display_text = f"Sign: {predicted}" if predicted else "Sign: Unknown"
-            cv2.putText(frame, display_text, (20, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 255, 0), 3)
+            predicted, conf = guess_letter(numbers)
+            if predicted:
+                display_text = f"Sign: {predicted} ({int(conf * 100)}%)"
+                cv2.putText(frame, display_text, (20, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3)
+            else:
+                cv2.putText(frame, "Sign: Unknown", (20, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 255), 2)
 
-        # Record new data samples
+        # Recording Phase
         if active_letter and sample_count < TARGET_SAMPLES:
             examples.append({"letter": active_letter, "numbers": numbers})
             sample_count += 1
             if sample_count >= TARGET_SAMPLES:
                 save_examples()
-                print(f"[SAVED] 20 samples for '{active_letter}'. Total samples: {len(examples)}")
+                print(f"[STORED] 20 vectors for '{active_letter}'. Total dataset: {len(examples)}")
                 active_letter = None
                 sample_count = 0
 
-    # UI Overlay
+    # Status Bar
     if active_letter:
         cv2.putText(frame, f"Recording '{active_letter}': {sample_count}/{TARGET_SAMPLES}",
                     (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
     elif not result.hand_landmarks:
-        cv2.putText(frame, f"Saved: {len(examples)} | Show hand to predict", (20, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
+        cv2.putText(frame, f"Samples: {len(examples)} | Press a-z to train | ESC to exit", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (180, 180, 180), 2)
 
     cv2.imshow(WINDOW_NAME, frame)
     key = cv2.waitKey(1) & 0xFF
 
-    if key == ord("q"):
+    # ESC key exits, leaving 'q' free for recording
+    if key == 27:
         break
     elif ord("a") <= key <= ord("z") and active_letter is None:
         active_letter = chr(key).upper()
