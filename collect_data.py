@@ -27,7 +27,7 @@ if os.path.exists(EXAMPLES_FILE):
     with open(EXAMPLES_FILE) as f:
         examples = json.load(f)
 else:
-    examples = []  # each one: {"letter": "A", "numbers": [63 numbers]}
+    examples = []  # each one: {"letter": "A", "numbers": [42 numbers]}
 
 
 def save_examples():

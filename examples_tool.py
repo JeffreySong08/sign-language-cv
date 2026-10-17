@@ -24,7 +24,7 @@ from collections import Counter
 
 EXAMPLES_FILE = "examples.json"
 BACKUP_FILE = "examples_backup.json"
-NUM_NUMBERS = 63  # must match features.py
+from features import NUM_NUMBERS  # must match features.py
 
 
 def load(path):

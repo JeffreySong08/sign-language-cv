@@ -7,10 +7,11 @@ Run:  python practice.py
     it shows "Correct!" for 1.5 seconds and moves to the next letter.
   - Press n to skip a letter, ESC to quit.
 
-It uses the examples in examples.json (recorded with camera.py) and the
-same recipe as Karen's app (features.py).
+It uses every examples_*.json file in this folder (like examples_karen.json)
+that was made with the same recipe as Karen's app (features.py).
 """
 
+import glob
 import json
 import random
 import time
@@ -20,12 +21,19 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from features import hand_to_numbers, guess_letter, NUM_NUMBERS
 
-EXAMPLES_FILE = "examples.json"
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
 
-with open(EXAMPLES_FILE) as f:
-    examples = [e for e in json.load(f) if len(e["numbers"]) == NUM_NUMBERS]
+examples = []
+for path in sorted(glob.glob("examples*.json")):
+    try:
+        with open(path) as f:
+            found = [e for e in json.load(f) if len(e.get("numbers", [])) == NUM_NUMBERS]
+    except (ValueError, AttributeError, TypeError):
+        print(f"Skipping {path}: it isn't a readable examples file")
+        continue
+    print(f"Loaded {len(found)} examples from {path}")
+    examples += found
 LETTERS = sorted({e["letter"] for e in examples})
 if not LETTERS:
     raise SystemExit("No examples found. Record some with camera.py first.")
