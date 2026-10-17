@@ -29,7 +29,8 @@ pip install -r requirements.txt
 
 | Command | What it does |
 |---|---|
-| `python practice.py` | Practice game: make the letter shown, hold it, get "Correct!". `n` skips, ESC quits. |
+| `python practice.py` | Practice game: make the letter shown, hold it, get "Correct!". SPACE skips, ESC quits. |
+| `python practice.py B` | Focus mode: practice only B (or press a letter key while running; `0` goes back to random). Shows how many times it worked and how long the last one took. |
 | `python camera.py` | Live classifier: shows the letter it sees. Press a letter key to record 20 examples (saved to `data/examples_camera.json`). ESC quits. |
 | `python collect_data.py yourname_left` | Record examples one key press at a time into `data/examples_yourname_left.json`. `1` undoes, ESC quits. |
 | `python examples_tool.py count` | How many examples each letter has. |

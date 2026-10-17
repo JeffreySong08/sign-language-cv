@@ -1,19 +1,24 @@
 """
 practice.py - fingerspelling practice mode (Step 7 of the mentor's guide).
 
-Run:  python practice.py
+Run:  python practice.py        (random letters)
+      python practice.py B      (focus mode: only B, good for testing one letter)
   - The screen shows a letter to make, e.g. "Make: B".
   - Hold the sign steady. When the app sees that letter 10 frames in a row,
     it shows "Correct!" for 1.5 seconds and moves to the next letter.
   - J and Z are motion letters: do the whole movement (J with your pinky,
     Z with your index finger). These use Etinosa's motion_recognition.py.
-  - Press n to skip a letter, ESC to quit.
+  - Press any letter key to switch to focus mode on that letter: it keeps
+    asking for the same letter and shows how many times it worked and how
+    long the last one took. Press 0 to go back to random letters.
+  - Press SPACE to skip a letter, ESC to quit.
 
 It uses every data/examples_*.json file (Karen's, the Kaggle dataset, and
 anything recorded with collect_data.py) and the shared recipe in features.py.
 """
 
 import random
+import sys
 import time
 import cv2
 import mediapipe as mp
@@ -34,7 +39,10 @@ print("Practicing letters:", " ".join(LETTERS))
 
 
 def next_target(current=None):
-    """Pick a random letter, but not the same one twice in a row."""
+    """Pick a random letter, but not the same one twice in a row.
+    In focus mode, always the focus letter."""
+    if focus:
+        return focus
     choices = [L for L in LETTERS if L != current] or LETTERS
     return random.choice(choices)
 
@@ -52,6 +60,14 @@ motion_tracker = MotionRecognizer()
 cap = cv2.VideoCapture(0)
 start = time.time()
 last_timestamp_ms = 0
+
+# Focus mode: python practice.py B  (or press a letter key while running)
+focus = sys.argv[1].upper() if len(sys.argv) > 1 else None
+if focus and focus not in LETTERS:
+    raise SystemExit(f"No examples for {focus}. Letters available: {' '.join(LETTERS)}")
+focus_hits = 0          # how many times the focus letter worked
+last_took = None        # seconds the last success took
+target_since = time.time()
 
 target = next_target()
 streak = 0              # matching frames in a row
@@ -97,7 +113,11 @@ while cap.isOpened():
             score += 1
             streak = 0
             correct_until = now + CORRECT_SECONDS
+            last_took = now - target_since
+            if focus:
+                focus_hits += 1
             target = next_target(target)
+            target_since = now + CORRECT_SECONDS
 
         cv2.putText(frame, f"Make: {target}", (20, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 5)
@@ -113,16 +133,36 @@ while cap.isOpened():
             cv2.putText(frame, f"Move: {tip}", (20, 195),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
 
-    cv2.putText(frame, f"Score: {score}   n = skip   ESC = quit", (20, h - 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 2)
+    if focus:
+        took = f", last took {last_took:.1f}s" if last_took is not None else ""
+        cv2.putText(frame, f"Focus {focus}: {focus_hits} correct{took}", (20, h - 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
+        help_text = "letter key = focus   0 = random   SPACE = skip   ESC = quit"
+    else:
+        help_text = f"Score: {score}   letter key = focus   SPACE = skip   ESC = quit"
+    cv2.putText(frame, help_text, (20, h - 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
 
     cv2.imshow("Fingerspelling Practice", frame)
     key = cv2.waitKey(1) & 0xFF
     if key == 27:                 # ESC quits
         break
-    if key == ord("n"):           # skip this letter
+    if key == ord(" "):           # skip this letter
         target = next_target(target)
         streak = 0
+        target_since = time.time()
+    elif key == ord("0"):         # back to random letters
+        focus = None
+        target = next_target(target)
+        streak = 0
+        target_since = time.time()
+    elif key != 255 and chr(key).upper() in LETTERS:   # focus on that letter
+        focus = chr(key).upper()
+        focus_hits, last_took = 0, None
+        target = focus
+        streak = 0
+        correct_until = 0
+        target_since = time.time()
 
 cap.release()
 cv2.destroyAllWindows()

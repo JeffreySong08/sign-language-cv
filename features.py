@@ -24,6 +24,15 @@ FINGERTIPS = {4, 8, 12, 16, 20}
 NUM_NUMBERS = 42  # 21 points x (x, y)
 MOTION_LETTERS = ("J", "Z")  # recognized from movement (motion_recognition.py)
 DATA_DIR = "data"            # all examples_*.json files live here
+# A left hand is a mirror image of a right hand. Mirroring = flipping every
+# x number (the wrist is at x=0). So each saved example also counts as the
+# other hand, and one recording works for both hands.
+MIRROR_EXAMPLES = True
+
+
+def mirror(numbers):
+    """The same hand shape, flipped left-right (the other hand)."""
+    return [-v if i % 2 == 0 else v for i, v in enumerate(numbers)]
 
 
 def load_all_examples(verbose=True):
@@ -41,6 +50,8 @@ def load_all_examples(verbose=True):
         if verbose:
             print(f"Loaded {len(found)} examples from {path}")
         examples += found
+    if MIRROR_EXAMPLES:
+        examples += [{"letter": e["letter"], "numbers": mirror(e["numbers"])} for e in examples]
     return examples
 
 
