@@ -29,6 +29,7 @@ pip install -r requirements.txt
 
 | Command | What it does |
 |---|---|
+| `python app.py` | **Website** (Gradio): open the link it prints, allow the camera, press Record. Live tab shows the letter; Practice tab is the game with a letter picker. |
 | `python practice.py` | Practice game: make the letter shown, hold it, get "Correct!". SPACE skips, ESC quits. |
 | `python practice.py B` | Focus mode: practice only B (or press a letter key while running; `0` goes back to random). Shows how many times it worked and how long the last one took. |
 | `python camera.py` | Live classifier: shows the letter it sees. Press a letter key to record 20 examples (saved to `data/examples_camera.json`). ESC quits. |
@@ -40,6 +41,7 @@ pip install -r requirements.txt
 
 | File | What it is |
 |---|---|
+| `app.py` | Website version (Gradio): Live and Practice tabs |
 | `camera.py` | Live classifier with recording |
 | `practice.py` | Practice game (the demo) |
 | `collect_data.py` | Recorder, one file per person/hand |
