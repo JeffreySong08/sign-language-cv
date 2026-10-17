@@ -167,8 +167,12 @@ while cap.isOpened():
     cv2.imshow(WINDOW_NAME, frame)
     key = cv2.waitKey(1) & 0xFF
 
+<<<<<<< Updated upstream
     # ESC key exits, leaving 'q' free for recording
     if key == 27:
+=======
+    if key == 27: #esc key
+>>>>>>> Stashed changes
         break
     elif ord("a") <= key <= ord("z") and active_letter is None:
         active_letter = chr(key).upper()
