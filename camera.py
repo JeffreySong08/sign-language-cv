@@ -7,7 +7,7 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-EXAMPLES_FILE = "examples.json"
+EXAMPLES_FILE = "examples_karen.json"
 TARGET_SAMPLES = 20
 KNN_K = 5
 MAX_NEIGHBOR_DISTANCE = 15.0  # Squared distance cutoff for valid gestures
@@ -179,4 +179,6 @@ while cap.isOpened():
         sample_count = 0
 
 cap.release()
-cv2.destroyAllWindows()# ASL Detector: all letters except J and Z
+cv2.destroyAllWindows()
+
+# ASL detector: all letters except J and Z
