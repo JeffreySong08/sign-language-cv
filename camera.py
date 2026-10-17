@@ -3,6 +3,9 @@ import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from hand_numbers import hand_to_numbers
+from letters import LETTERS
+from examples import examples, save_examples
 
 landmarker = vision.HandLandmarker.create_from_options(
     vision.HandLandmarkerOptions(
@@ -23,9 +26,14 @@ while cap.isOpened():
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)   # OpenCV is BGR, MediaPipe wants RGB
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
     result = landmarker.detect_for_video(mp_image, int((time.time() - start) * 1000))
-
+    hand = result.hand_landmarks[0] if result.hand_landmarks else None
     if result.hand_landmarks:
-        lm = result.hand_landmarks[0]              # 21 points, x/y from 0 to 1
+        lm = result.hand_landmarks[0]    
+        key = cv2.waitKey(1) & 0xFF
+        if hand is not None and chr(key).upper() in LETTERS:
+            examples.append({"letter": chr(key).upper(), "numbers": hand_to_numbers(hand)})
+            save_examples()
+            print(numbers)           # 21 points, x/y from 0 to 1
         h, w = frame.shape[:2]
         for p in lm:
             cv2.circle(frame, (int(p.x * w), int(p.y * h)), 4, (0, 255, 0), -1)
