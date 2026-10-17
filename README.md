@@ -62,7 +62,7 @@ pip install -r requirements.txt
   examples (`data/examples_dataset.json`).
 - **Jeffrey** (JeffreySong08): first camera hand tracking, the
   practice game, the recorder and examples tool, and organizing the repo.
-- Our mentor: the step-by-step guide in `docs/plan.md`.
+- Our mentor: Brandon Shin, the step-by-step guide in `docs/plan.md`.
 - Hand photos for `data/examples_dataset.json` come from an ASL hand-sign
   dataset on Kaggle (add the dataset link and its license here).
 - Built with help from Claude (Anthropic).
