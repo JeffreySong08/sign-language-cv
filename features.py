@@ -1,65 +1,72 @@
 """
-features.py - turns one hand into 63 numbers we can compare.
+features.py - the shared "recipe" for turning a hand into numbers,
+plus the letter guesser. Copied from Karen's camera.py so every script
+(camera.py, collect_data.py, practice.py) stays in agreement.
 
-MediaPipe gives us 21 points on the hand (wrist, knuckles, fingertips...).
-Their x/y/z values depend on WHERE your hand is in the camera and HOW CLOSE
-it is. We don't want that: an "A" is an "A" anywhere on screen. So we:
+If Karen changes hand_to_numbers or guess_letter in camera.py,
+copy the change here too, or old and new examples won't match.
 
-  1. Measure every point from the wrist (point 0), so the wrist is (0, 0, 0).
-  2. Divide by the hand's size (wrist -> middle-finger knuckle, point 9),
-     so a close-up hand and a far-away hand give the same numbers.
-  3. Return x, y and z for all 21 points in a flat list: 63 numbers.
-     (z is MediaPipe's guess at how far each point is from the camera.)
-
-This is Step 4 of the mentor's guide. Use it in other scripts like this:
-    from features import hand_to_numbers
-    numbers = hand_to_numbers(result.hand_landmarks[0])
+  hand_to_numbers(hand)        -> 42 numbers for one hand
+  guess_letter(numbers, examples) -> (letter, confidence) or (None, 0.0)
 """
 
 import math
 
-WRIST = 0
-MIDDLE_KNUCKLE = 9
-NUM_FEATURES = 63  # 21 points x (x, y, z)
+KNN_K = 5
+MAX_NEIGHBOR_DISTANCE = 15.0  # if even the best match is further than this, say "unknown"
+
+# Fingertips: thumb (4), index (8), middle (12), ring (16), pinky (20)
+FINGERTIPS = {4, 8, 12, 16, 20}
+NUM_NUMBERS = 42  # 21 points x (x, y)
 
 
 def hand_to_numbers(hand):
-    """hand = result.hand_landmarks[0] from camera.py (21 points with .x, .y, .z)."""
-    wrist = hand[WRIST]
-    knuckle = hand[MIDDLE_KNUCKLE]
-
-    # Hand size = distance from wrist to middle-finger knuckle (on screen, x and y)
-    size = math.hypot(knuckle.x - wrist.x, knuckle.y - wrist.y)
-    if size == 0:          # should never happen, but avoids dividing by zero
-        size = 1.0
-
+    """hand = result.hand_landmarks[0] (21 points with .x and .y)."""
+    wrist = hand[0]
+    knuckle = hand[9]  # base knuckle of middle finger
+    size = math.hypot(knuckle.x - wrist.x, knuckle.y - wrist.y) or 1e-6
     numbers = []
-    for dot in hand:
-        numbers.append((dot.x - wrist.x) / size)
-        numbers.append((dot.y - wrist.y) / size)
-        numbers.append((dot.z - wrist.z) / size)
+    for idx, dot in enumerate(hand):
+        # Fingertips count 2.5x, because finger shape matters most for letters
+        weight = 2.5 if idx in FINGERTIPS else 1.0
+        numbers.append(((dot.x - wrist.x) / size) * weight)
+        numbers.append(((dot.y - wrist.y) / size) * weight)
     return numbers
 
 
-# ---------------------------------------------------------------------------
-# Quick check. Run:  python features.py
-# It makes a fake hand, then the same hand moved and made bigger,
-# and shows that both give the SAME 63 numbers (that's the whole point).
-# ---------------------------------------------------------------------------
+def guess_letter(numbers, examples, k=KNN_K):
+    """Find the k closest saved examples and let them vote on the letter."""
+    distances = []
+    for item in examples:
+        if len(item["numbers"]) != len(numbers):
+            continue  # skip examples made with an old recipe
+        dist = sum((a - b) ** 2 for a, b in zip(numbers, item["numbers"]))
+        distances.append((dist, item["letter"]))
+    if not distances:
+        return None, 0.0
+
+    distances.sort(key=lambda x: x[0])
+    top_k = distances[:k]
+    if top_k[0][0] > MAX_NEIGHBOR_DISTANCE:
+        return None, 0.0
+
+    votes = {}
+    for _, letter in top_k:
+        votes[letter] = votes.get(letter, 0) + 1
+    best = max(votes, key=votes.get)
+    return best, votes[best] / len(top_k)
+
+
+# Quick check:  python features.py
 if __name__ == "__main__":
     from types import SimpleNamespace as Point
     import random
 
     random.seed(1)
-    hand = [Point(x=random.random(), y=random.random(), z=random.random()) for _ in range(21)]
-    # Same hand, shifted and 2x bigger (like moving closer to the camera)
-    moved = [Point(x=p.x * 2 + 0.3, y=p.y * 2 + 0.1, z=p.z * 2 - 0.2) for p in hand]
-
-    a = hand_to_numbers(hand)
-    b = hand_to_numbers(moved)
-
+    hand = [Point(x=random.random(), y=random.random()) for _ in range(21)]
+    moved = [Point(x=p.x * 2 + 0.3, y=p.y * 2 + 0.1) for p in hand]
+    a, b = hand_to_numbers(hand), hand_to_numbers(moved)
     print("Number of features:", len(a))
-    print("First 6 numbers (original hand):", [round(v, 3) for v in a[:6]])
-    print("First 6 numbers (moved + bigger):", [round(v, 3) for v in b[:6]])
     same = all(abs(x - y) < 1e-9 for x, y in zip(a, b))
-    print("Same numbers?", "YES - features.py works!" if same else "NO - something is wrong")
+    print("Same numbers when moved/bigger?", "YES" if same else "NO")
+    print("Guess:", guess_letter(b, [{"letter": "A", "numbers": a}]))
