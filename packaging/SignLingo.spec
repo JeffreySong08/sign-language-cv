@@ -11,7 +11,8 @@ a = Analysis(
     pathex=[str(root)],
     # Same layout as the project, so signlingo/paths.py finds them in the app too
     datas=[(str(root / "models" / "hand_landmarker.task"), "models"),
-           (str(root / "data" / "*.json"), "data")] + mp_datas,
+           (str(root / "data" / "*.json"), "data"),
+           (str(root / "assets" / "signs" / "[A-Z].png"), "assets/signs")] + mp_datas,
     binaries=mp_binaries,
     # main.py starts the modes by name, so PyInstaller can't see them on its own
     hiddenimports=["signlingo.practice", "signlingo.words"] + mp_hidden,

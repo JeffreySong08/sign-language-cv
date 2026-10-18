@@ -6,13 +6,13 @@ Presents randomized words up to 5 characters with sequential real-time tracking.
 import random
 import time
 import cv2
-import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from signlingo.features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
 from signlingo.motion_recognition import MotionRecognizer
 from signlingo.paths import MODEL_PATH
+from signlingo import camera, ui
 
 FRAMES_NEEDED = 8
 WORD_CELEBRATE_SECS = 1.3
@@ -85,68 +85,36 @@ def get_random_word(previous_word=""):
 
 
 def draw_word_hud(frame, current_word, char_idx, target, guess, streak, frames_needed, words_done):
-    h, w, _ = frame.shape
-    overlay = frame.copy()
-
-    # Glassmorphism panels
-    cv2.rectangle(overlay, (20, 20), (520, 120), (24, 24, 27), -1)
-    cv2.rectangle(overlay, (20, h - 85), (w - 20, h - 20), (24, 24, 27), -1)
-    cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
-
-    # Borders
-    cv2.rectangle(frame, (20, 20), (520, 120), (63, 63, 70), 1)
-    cv2.rectangle(frame, (20, h - 85), (w - 20, h - 20), (63, 63, 70), 1)
-
-    # Top Panel Header
-    cv2.putText(frame, f"WORD CHALLENGE  (TARGET LETTER: {target})", (35, 46),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (161, 161, 170), 1, cv2.LINE_AA)
-
-    # Word Letters Progression
-    start_x = 35
+    """Same look as Single Letter Practice: "Spell: WORD", hold bar, "I see"."""
+    h = frame.shape[0]
+    tip = f"Move: {ui.motion_tip(target)}" if target in MOTION_LETTERS else None
+    spell_width = ui.text_width("Spell: ", 2.0, 5) + sum(ui.text_width(ch, 2.0, 5) + 12 for ch in current_word)
+    ui.top_backdrop(frame, max(spell_width, ui.text_width(tip, 0.8, 2) if tip else 0), 215 if tip else 175)
+    x = 20
+    ui.text(frame, "Spell: ", (x, 70), 2.0, ui.WHITE, 5)
+    x += ui.text_width("Spell: ", 2.0, 5)
     for i, ch in enumerate(current_word):
         if i < char_idx:
-            color = (34, 197, 94)      # Completed: Emerald Green
+            color = ui.GREEN       # done
         elif i == char_idx:
-            color = (0, 255, 255)      # Active Target: Amber/Yellow
+            color = ui.YELLOW      # sign this one now
         else:
-            color = (113, 113, 122)    # Upcoming: Dim Slate
-        cv2.putText(frame, ch, (start_x + (i * 44), 86),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.15, color, 3, cv2.LINE_AA)
+            color = ui.DIM         # still to come
+        ui.text(frame, ch, (x, 70), 2.0, color, 5)
+        x += ui.text_width(ch, 2.0, 5) + 12
 
-    # Detection status badge
-    status_text = f"SEE: {guess}" if guess else "SEE: ..."
-    status_color = (34, 197, 94) if (guess == target and streak > 0) else (161, 161, 170)
-    cv2.putText(frame, status_text, (370, 86),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_color, 2, cv2.LINE_AA)
+    ui.hold_bar(frame, streak, frames_needed)
+    ui.text(frame, f"I see: {guess or '?'}", (20, 155), 1.0, ui.YELLOW, 2)
+    if tip:
+        ui.text(frame, tip, (20, 195), 0.8, ui.TIP, 2)
 
-    # Streak Progress Bar
-    bar_x, bar_y, bar_w, bar_h = 35, 96, 450, 7
-    fill_ratio = min(max(streak / frames_needed, 0.0), 1.0)
-    cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (51, 65, 85), -1)
-    if fill_ratio > 0.0:
-        cv2.rectangle(frame, (bar_x, bar_y), (bar_x + int(bar_w * fill_ratio), bar_y + bar_h), (34, 197, 94), -1)
-
-    # Bottom Footer
-    footer_text = f"WORDS SPELLED: {words_done}   |   CURRENT: {current_word}"
-    cv2.putText(frame, footer_text, (35, h - 55),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv2.LINE_AA)
-    controls = "[SPACE] Skip Word   |   [ESC] Quit to Menu"
-    cv2.putText(frame, controls, (35, h - 32),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (161, 161, 170), 1, cv2.LINE_AA)
-
+    ui.help_line(frame, f"Words spelled: {words_done}   SPACE = new word   ESC = quit")
     return frame
 
 
 def draw_success_card(frame, word):
-    h, w, _ = frame.shape
-    overlay = frame.copy()
-    box_w, box_h = 440, 110
-    x1, y1 = (w - box_w) // 2, (h - box_h) // 2
-    cv2.rectangle(overlay, (x1, y1), (x1 + box_w, y1 + box_h), (20, 83, 45), -1)
-    cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
-    cv2.rectangle(frame, (x1, y1), (x1 + box_w, y1 + box_h), (34, 197, 94), 2)
-    cv2.putText(frame, f"SPELLED '{word}'!", (x1 + 35, y1 + 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.25, (255, 255, 255), 3, cv2.LINE_AA)
+    h = frame.shape[0]
+    ui.centered(frame, f"Spelled {word}!", h // 2, 2.5, ui.GREEN, 6, boxed=True)
     return frame
 
 
@@ -158,7 +126,8 @@ landmarker = vision.HandLandmarker.create_from_options(
     )
 )
 motion_tracker = MotionRecognizer()
-cap = cv2.VideoCapture(0)
+cap = camera.open_camera()   # already open when started from the menu
+ui.open_window()
 start_time = time.time()
 last_timestamp_ms = 0
 
@@ -173,7 +142,7 @@ while cap.isOpened():
     ok, frame = cap.read()
     if not ok:
         break
-    frame = cv2.flip(frame, 1)
+    frame = ui.fit(cv2.flip(frame, 1))
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -186,10 +155,7 @@ while cap.isOpened():
     guess = None
     hand = result.hand_landmarks[0] if result.hand_landmarks else None
     if hand:
-        for p in hand:
-            cx, cy = int(p.x * w), int(p.y * h)
-            cv2.circle(frame, (cx, cy), 5, (16, 185, 129), 1, cv2.LINE_AA)
-            cv2.circle(frame, (cx, cy), 2, (255, 255, 255), -1, cv2.LINE_AA)
+        ui.hand_dots(frame, hand)
         guess, _ = guess_letter(hand_to_numbers(hand), examples)
 
     motion_letter = motion_tracker.update(hand, time.monotonic(), w / h)
@@ -227,7 +193,7 @@ while cap.isOpened():
             words_done=words_done
         )
 
-    cv2.imshow("SignLingo", frame)
+    ui.show(frame)
     key = cv2.waitKey(1) & 0xFF
     if key == 27:
         break

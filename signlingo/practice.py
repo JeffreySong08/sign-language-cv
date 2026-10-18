@@ -27,6 +27,7 @@ from mediapipe.tasks.python import vision
 from signlingo.features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
 from signlingo.motion_recognition import MotionRecognizer
 from signlingo.paths import MODEL_PATH
+from signlingo import camera, ui
 
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
@@ -58,7 +59,8 @@ landmarker = vision.HandLandmarker.create_from_options(
 
 motion_tracker = MotionRecognizer()
 
-cap = cv2.VideoCapture(0)
+cap = camera.open_camera()   # already open when started from the menu
+ui.open_window()
 start = time.time()
 last_timestamp_ms = 0
 
@@ -79,7 +81,7 @@ while cap.isOpened():
     ok, frame = cap.read()
     if not ok:
         break
-    frame = cv2.flip(frame, 1)
+    frame = ui.fit(cv2.flip(frame, 1))
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -92,8 +94,7 @@ while cap.isOpened():
     guess = None
     hand = result.hand_landmarks[0] if result.hand_landmarks else None
     if hand:
-        for p in hand:
-            cv2.circle(frame, (int(p.x * w), int(p.y * h)), 4, (0, 255, 0), -1)
+        ui.hand_dots(frame, hand)
         guess, _ = guess_letter(hand_to_numbers(hand), examples)
     # The motion tracker watches every frame for a J or Z movement
     motion_letter = motion_tracker.update(hand, time.monotonic(), w / h)
@@ -102,8 +103,7 @@ while cap.isOpened():
 
     if now < correct_until:
         # Showing "Correct!" - wait, then the next letter is already set
-        cv2.putText(frame, "Correct!", (w // 2 - 150, h // 2),
-                    cv2.FONT_HERSHEY_SIMPLEX, 2.5, (0, 255, 0), 6)
+        ui.centered(frame, "Correct!", h // 2, 2.5, ui.GREEN, 6, boxed=True)
     else:
         if target in MOTION_LETTERS:
             # One finished movement is enough for J and Z
@@ -120,31 +120,28 @@ while cap.isOpened():
             target = next_target(target)
             target_since = now + CORRECT_SECONDS
 
-        cv2.putText(frame, f"Make: {target}", (20, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 5)
-        # Progress bar: fills up as you hold the right sign
-        bar = int(300 * streak / FRAMES_NEEDED)
-        cv2.rectangle(frame, (20, 95), (320, 115), (100, 100, 100), 2)
-        cv2.rectangle(frame, (20, 95), (20 + bar, 115), (0, 255, 0), -1)
         seen = guess if guess else "?"
-        cv2.putText(frame, f"I see: {seen}", (20, 155),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
-        if target in MOTION_LETTERS:
-            tip = "draw a J with your pinky" if target == "J" else "draw a Z with your index finger"
-            cv2.putText(frame, f"Move: {tip}", (20, 195),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
+        tip = f"Move: {ui.motion_tip(target)}" if target in MOTION_LETTERS else None
+        widest = max(ui.text_width(f"Make: {target}", 2.0, 5),
+                     ui.text_width(tip, 0.8, 2) if tip else 0)
+        ui.top_backdrop(frame, widest, 215 if tip else 175)
+        ui.text(frame, f"Make: {target}", (20, 70), 2.0, ui.WHITE, 5)
+        ui.sign_card(frame, target)                 # how to sign it
+        ui.hold_bar(frame, streak, FRAMES_NEEDED)   # fills up as you hold the right sign
+        ui.text(frame, f"I see: {seen}", (20, 155), 1.0, ui.YELLOW, 2)
+        if tip:
+            ui.text(frame, tip, (20, 195), 0.8, ui.TIP, 2)
 
     if focus:
         took = f", last took {last_took:.1f}s" if last_took is not None else ""
-        cv2.putText(frame, f"Focus {focus}: {focus_hits} correct{took}", (20, h - 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 200, 0), 2)
         help_text = "letter key = focus   0 = random   SPACE = skip   ESC = quit"
+        focus_text = f"Focus {focus}: {focus_hits} correct{took}"
+        ui.help_line(frame, help_text, above=focus_text)
     else:
         help_text = f"Score: {score}   letter key = focus   SPACE = skip   ESC = quit"
-    cv2.putText(frame, help_text, (20, h - 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
+        ui.help_line(frame, help_text)
 
-    cv2.imshow("Fingerspelling Practice", frame)
+    ui.show(frame)
     key = cv2.waitKey(1) & 0xFF
     if key == 27:                 # ESC quits
         break

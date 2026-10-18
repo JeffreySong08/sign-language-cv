@@ -21,12 +21,22 @@ import traceback
 import cv2
 import numpy as np
 
+from signlingo import camera, ui
+
 PACKAGED = hasattr(sys, "_MEIPASS")
 
 if PACKAGED:
     log = open(os.path.join(os.path.expanduser("~"), "SignLingo-log.txt"), "w", buffering=1)
     sys.stdout = sys.stderr = log
     sys.argv = sys.argv[:1]   # macOS can add its own arguments; ignore them
+    # MediaPipe loads matplotlib, and the packaged app gives matplotlib a new
+    # temp folder each launch, so it re-scans every font (seconds). Keep its
+    # cache instead, one per app location in case the app is moved.
+    import hashlib
+    mpl_cache = os.path.join(os.path.expanduser("~"), "Library", "Caches", "SignLingo",
+                             "matplotlib-" + hashlib.sha1(sys._MEIPASS.encode()).hexdigest()[:12])
+    os.makedirs(mpl_cache, exist_ok=True)
+    os.environ["MPLCONFIGDIR"] = mpl_cache
 
 
 def show_message(text):
@@ -37,53 +47,48 @@ def show_message(text):
 
 
 def wait_for_camera(seconds=30):
-    """Wait until macOS camera permission is granted."""
+    """Wait until macOS camera permission is granted. The camera stays open
+    for the mode, so it starts without reopening it."""
     end = time.time() + seconds
     while time.time() < end:
-        cap = cv2.VideoCapture(0)
-        ok = cap.isOpened() and cap.read()[0]
-        cap.release()
-        if ok:
+        cap = camera.open_camera()
+        if cap.isOpened() and cap.read()[0]:
             return True
+        camera.close_camera()
         time.sleep(1)
     return False
 
 
 def choose_mode():
-    """Renders a start menu to select between practice and words modes."""
-    canvas = np.zeros((480, 640, 3), dtype=np.uint8)
-    canvas[:] = (24, 24, 27)
+    """Start menu, in the same window and style as the practice screens."""
+    w, h = ui.screen_size()
+    canvas = np.zeros((h, w, 3), dtype=np.uint8)
+    canvas[:] = ui.BACKGROUND
 
-    # Title & Subtitle
-    cv2.putText(canvas, "SIGNLINGO", (215, 110), 
-                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (255, 255, 255), 3, cv2.LINE_AA)
-    cv2.putText(canvas, "Select a Practice Mode to Begin", (185, 155), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (161, 161, 170), 1, cv2.LINE_AA)
+    mid = h // 2               # everything sits around the middle of the screen
+    ui.centered(canvas, "SignLingo", mid - 160, 3.0, ui.WHITE, 7)
+    ui.centered(canvas, "ASL fingerspelling practice", mid - 100, 1.0, ui.GREY, 2)
 
-    # Mode 1 Card: Single Letter Practice
-    cv2.rectangle(canvas, (110, 195), (530, 265), (39, 39, 42), -1)
-    cv2.rectangle(canvas, (110, 195), (530, 265), (63, 63, 70), 1)
-    cv2.putText(canvas, "[1] Single Letter Practice", (135, 238), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.72, (34, 197, 94), 2, cv2.LINE_AA)
+    # The two modes: the key to press in yellow, the name in white
+    for y, key, name in ((mid + 40, "1", "Single Letter Practice"), (mid + 130, "2", "Word Challenge")):
+        x = (w - ui.text_width(f"{key}   {name}", 1.5, 4)) // 2
+        ui.text(canvas, key, (x, y), 1.5, ui.YELLOW, 4)
+        ui.text(canvas, name, (x + ui.text_width(f"{key}   ", 1.5, 4), y), 1.5, ui.WHITE, 4)
 
-    # Mode 2 Card: Word Spelling Challenge
-    cv2.rectangle(canvas, (110, 290), (530, 360), (39, 39, 42), -1)
-    cv2.rectangle(canvas, (110, 290), (530, 360), (63, 63, 70), 1)
-    cv2.putText(canvas, "[2] Word Spelling Challenge", (135, 333), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.72, (0, 255, 255), 2, cv2.LINE_AA)
+    ui.help_line(canvas, "1 or 2 = start   ESC = quit")
 
-    # Instructions
-    cv2.putText(canvas, "Press [1] or [2] to start   |   [ESC] to Exit", (170, 425), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.48, (113, 113, 122), 1, cv2.LINE_AA)
-
-    cv2.imshow("SignLingo", canvas)
+    ui.open_window()
+    ui.show(canvas)
+    cv2.waitKey(1)   # draw the menu now
+    # Load the hand-tracking library while the menu is up, so pressing 1 or 2
+    # starts quickly. (A key pressed meanwhile still counts.)
+    import mediapipe  # noqa: F401
+    from mediapipe.tasks.python import vision  # noqa: F401
     while True:
         key = cv2.waitKey(0) & 0xFF
         if key == ord("1"):
-            cv2.destroyAllWindows()
-            return "signlingo.practice"
+            return "signlingo.practice"   # same window carries on into the mode
         elif key == ord("2"):
-            cv2.destroyAllWindows()
             return "signlingo.words"
         elif key == 27:
             cv2.destroyAllWindows()
