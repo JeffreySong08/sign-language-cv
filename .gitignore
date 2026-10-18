@@ -13,3 +13,4 @@ dist/
 # Gradio / Web caches
 .gradio/
 .DS_Store
+*.zip
