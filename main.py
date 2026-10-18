@@ -51,7 +51,8 @@ def wait_for_camera(seconds=30):
 # into a special folder. Work from there so the usual file names still work.
 base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 os.chdir(base)
-sys.path.insert(0, base)
+# (Don't add base to sys.path: on a Mac that makes OpenCV find its own folder
+# instead of its compiled part, which crashes with a "recursion" error.)
 
 try:
     if not wait_for_camera():
