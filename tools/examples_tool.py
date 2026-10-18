@@ -1,10 +1,10 @@
 """
 examples_tool.py - look at and clean up the example files in data/.
 
-  python examples_tool.py count
+  python -m tools.examples_tool count
       Shows how many examples each letter has, in total and per file.
 
-  python examples_tool.py remove C jeffrey_left
+  python -m tools.examples_tool remove C jeffrey_left
       Deletes ALL examples of letter C from data/examples_jeffrey_left.json,
       so you can record C again. (Saves a backup copy first.)
 
@@ -17,7 +17,8 @@ import os
 import shutil
 import sys
 from collections import Counter
-from features import DATA_DIR, NUM_NUMBERS, load_all_examples
+from signlingo.features import NUM_NUMBERS, load_all_examples
+from signlingo.paths import DATA_DIR
 
 
 def show_counts(examples):

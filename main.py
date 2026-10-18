@@ -2,11 +2,11 @@
 main.py - starts SignLingo, the downloadable app.
 
 Opens a modern start menu to choose between:
-  [1] Single Letter Practice (practice.py)
-  [2] Word Challenge Mode   (words.py)
+  [1] Single Letter Practice (signlingo/practice.py)
+  [2] Word Challenge Mode   (signlingo/words.py)
 
 Run from code:    python main.py
-Build the app:    ./build_app.sh   (makes dist/SignLingo.app on macOS)
+Build the app:    ./packaging/build_app.sh   (makes dist/SignLingo.app on macOS)
 
 When opened from Finder, all logs and errors are written to 
 SignLingo-log.txt in your home folder.
@@ -81,10 +81,10 @@ def choose_mode():
         key = cv2.waitKey(0) & 0xFF
         if key == ord("1"):
             cv2.destroyAllWindows()
-            return "practice"
+            return "signlingo.practice"
         elif key == ord("2"):
             cv2.destroyAllWindows()
-            return "words"
+            return "signlingo.words"
         elif key == 27:
             cv2.destroyAllWindows()
             sys.exit(0)

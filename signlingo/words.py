@@ -3,23 +3,16 @@ words.py - ASL fingerspelling word challenge mode for SignLingo.
 Presents randomized words up to 5 characters with sequential real-time tracking.
 """
 
-import os
 import random
-import sys
 import time
 import cv2
 import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
-from motion_recognition import MotionRecognizer
-
-# Bundle path resolution
-if getattr(sys, "frozen", False):
-    os.chdir(sys._MEIPASS)
-else:
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+from signlingo.features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
+from signlingo.motion_recognition import MotionRecognizer
+from signlingo.paths import MODEL_PATH
 
 FRAMES_NEEDED = 8
 WORD_CELEBRATE_SECS = 1.3
@@ -159,7 +152,7 @@ def draw_success_card(frame, word):
 
 landmarker = vision.HandLandmarker.create_from_options(
     vision.HandLandmarkerOptions(
-        base_options=python.BaseOptions(model_asset_path="hand_landmarker.task"),
+        base_options=python.BaseOptions(model_asset_path=str(MODEL_PATH)),
         running_mode=vision.RunningMode.VIDEO,
         num_hands=1,
     )

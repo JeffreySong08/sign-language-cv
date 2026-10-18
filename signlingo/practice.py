@@ -1,8 +1,8 @@
 """
 practice.py - fingerspelling practice mode (Step 7 of the mentor's guide).
 
-Run:  python practice.py        (random letters)
-      python practice.py B      (focus mode: only B, good for testing one letter)
+Run:  python -m signlingo.practice        (random letters)
+      python -m signlingo.practice B      (focus mode: only B, good for testing one letter)
   - The screen shows a letter to make, e.g. "Make: B".
   - Hold the sign steady. When the app sees that letter 10 frames in a row,
     it shows "Correct!" for 1.5 seconds and moves to the next letter.
@@ -24,8 +24,9 @@ import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
-from motion_recognition import MotionRecognizer
+from signlingo.features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
+from signlingo.motion_recognition import MotionRecognizer
+from signlingo.paths import MODEL_PATH
 
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
@@ -49,7 +50,7 @@ def next_target(current=None):
 
 landmarker = vision.HandLandmarker.create_from_options(
     vision.HandLandmarkerOptions(
-        base_options=python.BaseOptions(model_asset_path="hand_landmarker.task"),
+        base_options=python.BaseOptions(model_asset_path=str(MODEL_PATH)),
         running_mode=vision.RunningMode.VIDEO,
         num_hands=1,
     )
@@ -61,7 +62,7 @@ cap = cv2.VideoCapture(0)
 start = time.time()
 last_timestamp_ms = 0
 
-# Focus mode: python practice.py B  (or press a letter key while running)
+# Focus mode: python -m signlingo.practice B  (or press a letter key while running)
 focus = sys.argv[1].upper() if len(sys.argv) > 1 else None
 if focus and focus not in LETTERS:
     raise SystemExit(f"No examples for {focus}. Letters available: {' '.join(LETTERS)}")

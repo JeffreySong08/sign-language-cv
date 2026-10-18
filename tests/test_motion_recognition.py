@@ -1,10 +1,10 @@
-"""Run without a webcam or MediaPipe: python -m unittest test_motion_recognition"""
+"""Run without a webcam or MediaPipe: python -m unittest discover tests"""
 
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from motion_recognition import MotionRecognizer, TEMPLATES, _resample, match_path
+from signlingo.motion_recognition import MotionRecognizer, TEMPLATES, _resample, match_path
 
 
 def make_hand(letter, dx=0, dy=0):
