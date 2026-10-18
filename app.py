@@ -221,4 +221,4 @@ with gr.Blocks(title="ASL Fingerspelling Practice", **({} if CSS_IN_LAUNCH else 
                 "See README.md for credits.")
 
 if __name__ == "__main__":
-    demo.launch(**({"css": CSS} if CSS_IN_LAUNCH else {}))
+    demo.launch(server_name="0.0.0.0", server_port=7865, share=True)
