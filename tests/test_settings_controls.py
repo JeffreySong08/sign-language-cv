@@ -202,6 +202,26 @@ class LifecycleTests(unittest.TestCase):
             menu.assert_called_once()
 
 
+class StepByStepTracker:
+    """Tracks each frame as soon as it is submitted, so these tests see exactly
+    one tracking result per frame. (The real background tracker is tested in
+    test_threads.py.)"""
+    def __init__(self, landmarker):
+        self.landmarker = landmarker
+        self.result = (None, 0)
+
+    def submit(self, rgb, timestamp_ms):
+        import mediapipe as mp
+        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        self.result = (self.landmarker.detect_for_video(image, timestamp_ms), self.result[1] + 1)
+
+    def latest(self, wait=False):
+        return self.result
+
+    def close(self):
+        pass
+
+
 class ModeIntegrationTests(unittest.TestCase):
     def run_one_frame(self, mode, store, close=False, keys=None):
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -219,6 +239,7 @@ class ModeIntegrationTests(unittest.TestCase):
             stack.enter_context(patch.object(cv2, 'VideoCapture', return_value=cap))
             from mediapipe.tasks.python import vision
             stack.enter_context(patch.object(vision.HandLandmarker, 'create_from_options', return_value=detector))
+            stack.enter_context(patch('signlingo.tracker.HandTracker', StepByStepTracker))
             for method in ('namedWindow', 'setWindowProperty', 'setMouseCallback', 'imshow', 'destroyAllWindows'):
                 stack.enter_context(patch.object(cv2, method))
             stack.enter_context(patch.object(cv2, 'waitKey', side_effect=keys,
