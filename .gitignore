@@ -16,3 +16,4 @@ dist/
 .gradio/
 .DS_Store
 *.zip
+state/desktop-build.log

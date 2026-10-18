@@ -11,7 +11,7 @@ Run:  python -m signlingo.practice        (random letters)
   - Press any letter key to switch to focus mode on that letter: it keeps
     asking for the same letter and shows how many times it worked and how
     long the last one took. Press 0 to go back to random letters.
-  - Press SPACE to skip a letter, ESC to quit.
+  - Press SPACE to skip a letter, ESC (or the Main Menu button) to go back to the menu.
 
 It uses every data/examples_*.json file (Karen's, the Kaggle dataset, and
 anything recorded with collect_data.py) and the shared recipe in features.py.
@@ -28,6 +28,7 @@ from signlingo.features import hand_to_numbers, guess_letter, load_all_examples,
 from signlingo.motion_recognition import MotionRecognizer
 from signlingo.paths import MODEL_PATH
 from signlingo import camera, ui
+from signlingo.menu_button import MENU_BUTTON, draw_menu_button, install
 
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
@@ -61,6 +62,7 @@ motion_tracker = MotionRecognizer()
 
 cap = camera.open_camera()   # already open when started from the menu
 ui.open_window()
+install()                    # clicks on the Main Menu button
 start = time.time()
 last_timestamp_ms = 0
 
@@ -134,16 +136,17 @@ while cap.isOpened():
 
     if focus:
         took = f", last took {last_took:.1f}s" if last_took is not None else ""
-        help_text = "letter key = focus   0 = random   SPACE = skip   ESC = quit"
+        help_text = "letter key = focus   0 = random   SPACE = skip   ESC = menu"
         focus_text = f"Focus {focus}: {focus_hits} correct{took}"
         ui.help_line(frame, help_text, above=focus_text)
     else:
-        help_text = f"Score: {score}   letter key = focus   SPACE = skip   ESC = quit"
+        help_text = f"Score: {score}   letter key = focus   SPACE = skip   ESC = menu"
         ui.help_line(frame, help_text)
 
+    draw_menu_button(frame)
     ui.show(frame)
     key = cv2.waitKey(1) & 0xFF
-    if key == 27:                 # ESC quits
+    if key == 27 or MENU_BUTTON["clicked"]:   # ESC or Main Menu: back to the menu
         break
     if key == ord(" "):           # skip this letter
         target = next_target(target)
@@ -162,5 +165,6 @@ while cap.isOpened():
         correct_until = 0
         target_since = time.time()
 
-cap.release()
-cv2.destroyAllWindows()
+# Back to the menu: free the hand model, keep the camera open for the next mode
+landmarker.close()
+

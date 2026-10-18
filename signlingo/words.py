@@ -13,6 +13,7 @@ from signlingo.features import hand_to_numbers, guess_letter, load_all_examples,
 from signlingo.motion_recognition import MotionRecognizer
 from signlingo.paths import MODEL_PATH
 from signlingo import camera, ui
+from signlingo.menu_button import MENU_BUTTON, draw_menu_button, install
 
 FRAMES_NEEDED = 8
 WORD_CELEBRATE_SECS = 1.3
@@ -108,7 +109,7 @@ def draw_word_hud(frame, current_word, char_idx, target, guess, streak, frames_n
     if tip:
         ui.text(frame, tip, (20, 195), 0.8, ui.TIP, 2)
 
-    ui.help_line(frame, f"Words spelled: {words_done}   SPACE = new word   ESC = quit")
+    ui.help_line(frame, f"Words spelled: {words_done}   SPACE = new word   ESC = menu")
     return frame
 
 
@@ -128,6 +129,7 @@ landmarker = vision.HandLandmarker.create_from_options(
 motion_tracker = MotionRecognizer()
 cap = camera.open_camera()   # already open when started from the menu
 ui.open_window()
+install()                    # clicks on the Main Menu button
 start_time = time.time()
 last_timestamp_ms = 0
 
@@ -193,14 +195,15 @@ while cap.isOpened():
             words_done=words_done
         )
 
+    draw_menu_button(frame)
     ui.show(frame)
     key = cv2.waitKey(1) & 0xFF
-    if key == 27:
+    if key == 27 or MENU_BUTTON["clicked"]:   # ESC or Main Menu: back to the menu
         break
     elif key == ord(" "):
         current_word = get_random_word(previous_word=current_word)
         char_idx = 0
         streak = 0
 
-cap.release()
-cv2.destroyAllWindows()
+# Back to the menu: free the hand model, keep the camera open for the next mode
+landmarker.close()
