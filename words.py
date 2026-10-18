@@ -1,6 +1,6 @@
 """
 words.py - ASL fingerspelling word challenge mode for SignLingo.
-Spells out complete words sequentially with real-time feedback.
+Presents randomized words up to 5 characters with sequential real-time tracking.
 """
 
 import os
@@ -30,24 +30,65 @@ if not LETTERS:
     raise SystemExit("No examples found. Record some with collect_data.py first.")
 LETTERS = sorted(LETTERS + list(MOTION_LETTERS))
 
-# Static dictionary filtered to letters that actually exist in your dataset
-PRESET_WORDS = [
-    "AI", "CAT", "DOG", "BYTE", "CODE", "DATA", "ROBOT",
-    "VISION", "TECH", "OPEN", "FAST", "HAND", "SIGN"
+# Dictionary of real words between 2 and 5 characters
+DICTIONARY = [
+    # 2-letter
+    "AI", "AT", "BY", "GO", "HI", "IN", "IS", "IT", "MY", "NO", "ON", "OR", "TO", "UP",
+    # 3-letter
+    "ACE", "ACT", "AIR", "ARM", "BAD", "BAG", "BAR", "BAT", "BED", "BET", "BIG", "BIT",
+    "BOX", "BOY", "BUS", "BUY", "CAN", "CAP", "CAR", "CAT", "CUP", "CUT", "DAY", "DOG",
+    "DRY", "EAR", "EAT", "EGG", "END", "EYE", "FAN", "FAR", "FAT", "FIT", "FLY", "FOR",
+    "FOX", "FUN", "GET", "HAT", "HIT", "HOT", "ICE", "INK", "JAR", "KEY", "LEG", "LIP",
+    "MAP", "NET", "NUT", "PEN", "PET", "PIN", "POT", "RED", "RUN", "SIT", "SKY", "SUN",
+    "TEA", "TIE", "TOY", "VAN", "WAR", "WET", "WIN", "ZIP",
+    # 4-letter
+    "ABLE", "ACID", "AGED", "AWAY", "BABY", "BACK", "BAKE", "BALL", "BAND", "BANK",
+    "BARN", "BATH", "BEAR", "BEAT", "BIRD", "BITE", "BLUE", "BOAT", "BODY", "BONE",
+    "BOOK", "BORN", "BURN", "BUSY", "BYTE", "CAFE", "CAKE", "CALL", "CALM", "CAMP",
+    "CARD", "CARE", "CHAT", "CHEF", "CITY", "CLAY", "CLIP", "CLUB", "COAT", "CODE",
+    "COLD", "COOK", "COOL", "COPY", "CORN", "COST", "DARK", "DATA", "DATE", "DAWN",
+    "DEAL", "DEAR", "DESK", "DIET", "DISH", "DOOR", "DRAW", "DROP", "DRUM", "DUCK",
+    "DUST", "DUTY", "EASY", "EDGE", "EVEN", "EXIT", "FACE", "FACT", "FAIL", "FAIR",
+    "FARM", "FAST", "FEEL", "FILL", "FILM", "FIND", "FIRE", "FISH", "FIVE", "FLAG",
+    "FLOW", "FOOD", "FORK", "FREE", "FROG", "FULL", "GAME", "GATE", "GIFT", "GLOW",
+    "GOLD", "GOOD", "GRAB", "GRID", "GROW", "HAIR", "HALF", "HAND", "HARD", "HEAD",
+    "HELP", "HERO", "HIDE", "HILL", "HOLD", "HOME", "HOPE", "HORN", "HOUR", "HUNT",
+    "ICON", "IDEA", "IRON", "ITEM", "JOIN", "JUMP", "JUST", "KEEP", "KING", "KITE",
+    "KNOT", "LAKE", "LAMP", "LAND", "LANE", "LEAF", "LEAN", "LION", "LOCK", "LOOP",
+    "LUCK", "MAKE", "MARK", "MATH", "MEAL", "MIND", "MOON", "NAME", "NEAR", "NEST",
+    "NODE", "NOTE", "OPEN", "PACK", "PAGE", "PARK", "PATH", "PLAN", "PLAY", "PLUG",
+    "POST", "PUMP", "RAIN", "READ", "RING", "ROAD", "ROBOT", "ROCK", "ROOF", "ROOM",
+    "ROSE", "SAFE", "SAND", "SEED", "SHIP", "SHOP", "SIGN", "SNOW", "STAR", "STEP",
+    "TEAM", "TECH", "TEST", "TIME", "TREE", "UNIT", "USER", "VIEW", "WAVE", "WIND",
+    # 5-letter
+    "APPLE", "BEACH", "BLACK", "BRAIN", "BREAD", "BROWN", "CHAIR", "CHESS", "CLEAN",
+    "CLOCK", "CLOUD", "CRAFT", "DANCE", "DRAFT", "DREAM", "DRIVE", "EARTH", "FLAME",
+    "FLOAT", "FOCUS", "FRUIT", "GIANT", "GLASS", "GRAPE", "GREEN", "HEART", "HONEY",
+    "HOUSE", "IMAGE", "JUICE", "LIGHT", "LOGIC", "LUNCH", "MAGIC", "MATCH", "MODEL",
+    "MONEY", "MOUSE", "MUSIC", "NIGHT", "OCEAN", "PAINT", "PAPER", "PARTY", "PEACE",
+    "PIANO", "PILOT", "PIZZA", "PLANT", "PLATE", "POINT", "POWER", "PRIDE", "PRIME",
+    "QUICK", "QUIET", "RADIO", "RIVER", "ROBOT", "SCALE", "SCOPE", "SHARK", "SHIRT",
+    "SMILE", "SMOKE", "SNAKE", "SPACE", "SPEED", "SPORT", "STAND", "STORM", "SUGAR",
+    "TABLE", "TIGER", "TOUCH", "TRAIN", "TRUCK", "VALVE", "VOICE", "WATER", "WHEEL",
+    "WHITE", "WOMAN", "WORLD", "YOUTH"
 ]
-WORDS = [w for w in PRESET_WORDS if all(c in LETTERS for c in w)]
 
-# Bulletproof fallback if none of the dictionary words match dataset letters
-if not WORDS:
-    avail = [c for c in LETTERS if c not in MOTION_LETTERS]
-    if len(avail) >= 3:
-        WORDS = [avail[0] + avail[1], avail[1] + avail[2], avail[0] + avail[2]]
-    elif len(avail) == 2:
-        WORDS = [avail[0] + avail[1]]
-    else:
-        WORDS = [LETTERS[0] * 2]
+# Keep only words whose letters exist entirely within your dataset
+VALID_WORDS = [w for w in DICTIONARY if len(w) <= 5 and all(c in LETTERS for c in w)]
 
-print("Loaded Word Challenge words:", WORDS)
+
+def get_random_word(previous_word=""):
+    """
+    Returns a random word (<= 5 chars) from the available dataset letters.
+    If no dictionary words match, synthesizes a 2-4 letter combination.
+    """
+    if VALID_WORDS:
+        candidates = [w for w in VALID_WORDS if w != previous_word] or VALID_WORDS
+        return random.choice(candidates)
+
+    static_pool = [c for c in LETTERS if c not in MOTION_LETTERS] or LETTERS
+    length = random.randint(2, min(4, len(static_pool)))
+    return "".join(random.choice(static_pool) for _ in range(length))
 
 
 def draw_word_hud(frame, current_word, char_idx, target, guess, streak, frames_needed, words_done):
@@ -67,15 +108,15 @@ def draw_word_hud(frame, current_word, char_idx, target, guess, streak, frames_n
     cv2.putText(frame, f"WORD CHALLENGE  (TARGET LETTER: {target})", (35, 46),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (161, 161, 170), 1, cv2.LINE_AA)
 
-    # Word Progression
+    # Word Letters Progression
     start_x = 35
     for i, ch in enumerate(current_word):
         if i < char_idx:
-            color = (34, 197, 94)      # Completed: Green
+            color = (34, 197, 94)      # Completed: Emerald Green
         elif i == char_idx:
-            color = (0, 255, 255)      # Active: Yellow
+            color = (0, 255, 255)      # Active Target: Amber/Yellow
         else:
-            color = (113, 113, 122)    # Remaining: Muted Gray
+            color = (113, 113, 122)    # Upcoming: Dim Slate
         cv2.putText(frame, ch, (start_x + (i * 44), 86),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.15, color, 3, cv2.LINE_AA)
 
@@ -96,7 +137,7 @@ def draw_word_hud(frame, current_word, char_idx, target, guess, streak, frames_n
     footer_text = f"WORDS SPELLED: {words_done}   |   CURRENT: {current_word}"
     cv2.putText(frame, footer_text, (35, h - 55),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv2.LINE_AA)
-    controls = "[SPACE] Skip Word   |   [ESC] Quit"
+    controls = "[SPACE] Skip Word   |   [ESC] Quit to Menu"
     cv2.putText(frame, controls, (35, h - 32),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (161, 161, 170), 1, cv2.LINE_AA)
 
@@ -116,7 +157,6 @@ def draw_success_card(frame, word):
     return frame
 
 
-# Initialize Hand Landmarker and Motion Tracker directly at top level
 landmarker = vision.HandLandmarker.create_from_options(
     vision.HandLandmarkerOptions(
         base_options=python.BaseOptions(model_asset_path="hand_landmarker.task"),
@@ -129,8 +169,7 @@ cap = cv2.VideoCapture(0)
 start_time = time.time()
 last_timestamp_ms = 0
 
-word_idx = 0
-current_word = WORDS[word_idx]
+current_word = get_random_word()
 char_idx = 0
 words_done = 0
 streak = 0
@@ -181,8 +220,7 @@ while cap.isOpened():
                 words_done += 1
                 just_spelled = current_word
                 celebrate_until = now + WORD_CELEBRATE_SECS
-                word_idx = (word_idx + 1) % len(WORDS)
-                current_word = WORDS[word_idx]
+                current_word = get_random_word(previous_word=current_word)
                 char_idx = 0
 
         frame = draw_word_hud(
@@ -201,8 +239,7 @@ while cap.isOpened():
     if key == 27:
         break
     elif key == ord(" "):
-        word_idx = (word_idx + 1) % len(WORDS)
-        current_word = WORDS[word_idx]
+        current_word = get_random_word(previous_word=current_word)
         char_idx = 0
         streak = 0
 
