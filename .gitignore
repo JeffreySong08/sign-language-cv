@@ -1,11 +1,15 @@
+# Python bytecode & environments
 __pycache__/
-.DS_Store
-*_backup.json
-*.zip
-*.bundle
-.venv*/
+*.py[cod]
+*$py.class
+venv/
+.env
 
+# PyInstaller build outputs
 build/
 dist/
 *.spec
+
+# Gradio / Web caches
 .gradio/
+.DS_Store
