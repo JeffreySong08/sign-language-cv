@@ -21,7 +21,6 @@ import random
 import sys
 import time
 import cv2
-import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from signlingo.features import hand_to_numbers, guess_letter, load_all_examples, MOTION_LETTERS
@@ -31,6 +30,7 @@ from signlingo import camera, ui
 from signlingo.menu_button import MENU_BUTTON, draw_menu_button, install
 from signlingo.settings import get_settings
 from signlingo.settings_ui import SettingsPanel, limit_frame_rate, window_is_open
+from signlingo.tracker import HandTracker
 
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
@@ -71,6 +71,9 @@ settings_revision = settings_panel.revision
 window_closed = False
 start = time.time()
 last_timestamp_ms = 0
+tracker = HandTracker(landmarker)   # tracking runs alongside drawing
+last_seq = 0
+guess = None
 
 # Focus mode: python -m signlingo.practice B  (or press a letter key while running)
 focus = sys.argv[1].upper() if len(sys.argv) > 1 else None
@@ -95,25 +98,26 @@ while cap.isOpened():
     if not ok:
         break
     frame = ui.fit(cv2.flip(frame, 1) if settings.values.selfie else frame)
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-
+    rgb = cv2.cvtColor(ui.for_detection(frame), cv2.COLOR_BGR2RGB)
     timestamp_ms = max(int((time.time() - start) * 1000), last_timestamp_ms + 1)
     last_timestamp_ms = timestamp_ms
-    result = landmarker.detect_for_video(mp_image, timestamp_ms)
-    h, w = frame.shape[:2]
+    tracker.submit(rgb, timestamp_ms)              # tracked while this frame is drawn and shown
+    result, seq = tracker.latest(wait=last_seq == 0)
+    fresh = seq != last_seq                        # a newly tracked frame: counts toward the hold
+    last_seq = seq
+    w, h = ui.points(frame)
     now = time.time()
 
-    guess = None
     hand = result.hand_landmarks[0] if result.hand_landmarks else None
-    if hand:
-        if settings.values.show_landmarks:
-            ui.hand_dots(frame, hand)
-        guess, _ = guess_letter(hand_to_numbers(hand), examples)
-    # The motion tracker watches every frame for a J or Z movement
-    motion_letter = motion_tracker.update(hand if not settings_panel.is_open else None, time.monotonic(), w / h)
-    if motion_letter:
-        guess = motion_letter
+    if hand and settings.values.show_landmarks:
+        ui.hand_dots(frame, hand)
+    motion_letter = None
+    if fresh:
+        guess = guess_letter(hand_to_numbers(hand), examples)[0] if hand else None
+        # The motion tracker watches every tracked frame for a J or Z movement
+        motion_letter = motion_tracker.update(hand if not settings_panel.is_open else None, time.monotonic(), w / h)
+        if motion_letter:
+            guess = motion_letter
 
     if now < correct_until:
         # Showing "Correct!" - wait, then the next letter is already set
@@ -121,10 +125,10 @@ while cap.isOpened():
     else:
         if settings_panel.is_open:
             streak = 0                  # practice pauses while settings are open
-        elif target in MOTION_LETTERS:
+        elif fresh and target in MOTION_LETTERS:
             # One finished movement is enough for J and Z
             streak = FRAMES_NEEDED if motion_letter == target else 0
-        else:
+        elif fresh:
             streak = streak + 1 if guess == target else 0
         if streak >= FRAMES_NEEDED:
             score += 1
@@ -188,6 +192,7 @@ while cap.isOpened():
     limit_frame_rate(started, settings.values.low_power)
 
 # Back to the menu: free the hand model, keep the camera open for the next mode
+tracker.close()
 landmarker.close()
 if window_closed:
     raise SystemExit(0)

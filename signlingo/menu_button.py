@@ -30,7 +30,7 @@ def install(window_name=ui.WINDOW, settings_panel=None):
 
 def draw_menu_button(frame):
     """Draw the Main Menu button and remember its rectangle for mouse clicks."""
-    w = frame.shape[1]
+    w = ui.points(frame)[0]
     label_w = ui.text_width(MENU_BUTTON_LABEL, 0.8, 2)
     x2, y1 = w - 8, 8
     x1, y2 = x2 - label_w - 40, y1 + 52            # at least 44 px tall to click easily
@@ -44,6 +44,7 @@ def draw_menu_button(frame):
 
 def on_mouse(event, x, y, flags, param):
     """Settings consume clicks first so the menu cannot fire behind the popup."""
+    x, y = ui.to_points(x, y)        # OpenCV reports real pixels; layout is in points
     if _settings_panel is not None and _settings_panel.on_mouse(event, x, y, flags, param):
         MENU_BUTTON["hover"] = False
         return

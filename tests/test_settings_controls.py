@@ -148,7 +148,7 @@ class LifecycleTests(unittest.TestCase):
             w, h = ui.screen_size()
             def click_spell_words(delay):     # click the middle of the "2 Spell Words" line
                 if delay == 30:
-                    callback['fn'](cv2.EVENT_LBUTTONDOWN, w // 2, h // 2 + 110, 0, None)
+                    callback['fn'](cv2.EVENT_LBUTTONDOWN, ui.px(w // 2), ui.px(h // 2 + 110), 0, None)   # real pixels
                 return 255
             stack.enter_context(patch.object(cv2, 'waitKey', side_effect=click_spell_words))
             stack.enter_context(patch.object(cv2, 'getWindowProperty', return_value=1))
@@ -174,7 +174,7 @@ class ModeIntegrationTests(unittest.TestCase):
         cap = Mock()
         cap.isOpened.return_value = True
         cap.read.return_value = (True, frame.copy())
-        camera._cap = None
+        camera.close_camera()
         with ExitStack() as stack:
             stack.enter_context(patch('signlingo.settings.get_settings', return_value=store))
             stack.enter_context(patch.object(sys, 'argv', ['main.py']))
@@ -199,7 +199,7 @@ class ModeIntegrationTests(unittest.TestCase):
             column = -1 if store.values.selfie else 0
             np.testing.assert_array_equal(rgb[0, column], [255, 0, 0])
         detector.close.assert_called_once()
-        camera._cap = None
+        camera.close_camera()          # stop the camera's reading thread
 
     def test_options_and_native_close_work_in_both_modes(self):
         with tempfile.TemporaryDirectory() as directory:

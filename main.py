@@ -19,7 +19,6 @@ import sys
 import time
 import traceback
 import cv2
-import numpy as np
 
 from signlingo import camera, ui
 from signlingo.settings_ui import SettingsPanel, window_is_open
@@ -62,9 +61,8 @@ def wait_for_camera(seconds=30):
 
 def choose_mode():
     """Start menu, in the same window and style as the practice screens."""
-    w, h = ui.screen_size()
-    canvas = np.zeros((h, w, 3), dtype=np.uint8)
-    canvas[:] = ui.BACKGROUND
+    w, h = ui.screen_size()    # layout in points; the canvas itself is full resolution
+    canvas = ui.blank()
 
     mid = h // 2               # everything sits around the middle of the screen
     ui.centered(canvas, "SignLingo", mid - 160, 3.0, ui.WHITE, 7)
@@ -87,6 +85,7 @@ def choose_mode():
     clicked = {"mode": None}
 
     def on_mouse(event, x, y, flags, param):
+        x, y = ui.to_points(x, y)        # OpenCV reports real pixels; layout is in points
         if settings_panel.on_mouse(event, x, y, flags, param):   # gear / popup first
             return
         if event == cv2.EVENT_LBUTTONDOWN:

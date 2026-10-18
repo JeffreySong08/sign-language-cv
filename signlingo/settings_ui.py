@@ -84,19 +84,20 @@ class SettingsPanel:
     def draw(self, frame, right=None):
         """Gear in the top-right corner (left of `right`, e.g. the Main Menu
         button), plus the popup when it's open."""
-        h, w = frame.shape[:2]
+        w, h = ui.points(frame)
         x2 = (right if right is not None else w) - 8
         self.gear_rect = (x2 - GEAR_SIZE, 8, x2, 8 + GEAR_SIZE)
         x1, y1, x2, y2 = self.gear_rect
         ui.backdrop(frame, x1, y1, x2, y2, darkness=0.75 if self.gear_hover else 0.6)
         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
         color = ui.YELLOW if self.gear_hover else ui.WHITE
+        px = ui.px
         for angle in range(0, 360, 45):
             a = math.radians(angle)
-            cv2.line(frame, (int(cx + 10 * math.cos(a)), int(cy + 10 * math.sin(a))),
-                     (int(cx + 15 * math.cos(a)), int(cy + 15 * math.sin(a))), color, 4, cv2.LINE_AA)
-        cv2.circle(frame, (cx, cy), 10, color, 3, cv2.LINE_AA)
-        cv2.circle(frame, (cx, cy), 4, color, 2, cv2.LINE_AA)
+            cv2.line(frame, (px(cx + 10 * math.cos(a)), px(cy + 10 * math.sin(a))),
+                     (px(cx + 15 * math.cos(a)), px(cy + 15 * math.sin(a))), color, px(4), cv2.LINE_AA)
+        cv2.circle(frame, (px(cx), px(cy)), px(10), color, px(3), cv2.LINE_AA)
+        cv2.circle(frame, (px(cx), px(cy)), px(4), color, px(2), cv2.LINE_AA)
         if not self.is_open:
             return frame
 
