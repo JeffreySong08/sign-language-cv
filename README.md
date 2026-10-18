@@ -32,7 +32,7 @@ Run these from the project folder.
 | Command | What it does |
 |---|---|
 | `python main.py` | **SignLingo**: start menu. `1` Learn Letters, `2` Spell Words, ESC quits. If you finish or leave a mode it comes back to this menu. |
-| `python -m signlingo.practice` | Letter practice on its own: make the letter shown (a picture in the bottom-right shows how), hold it, get "Correct!". SPACE skips, ESC quits. |
+| `python -m signlingo.practice` | Letter practice on its own: make the letter shown (Tutorial mode shows a picture in the bottom-right), hold it, get "Correct!". SPACE skips, ESC quits. |
 | `python -m signlingo.practice B` | Focus mode: practice only B (or press a letter key while running; `0` goes back to random). |
 | `python -m signlingo.words` | Spell Words on its own: spell random words up to 5 letters. |
 | `python -m tools.collect_data yourname_left` | Record examples one key press at a time into `data/examples_yourname_left.json`. `1` undoes, ESC quits. |
@@ -41,7 +41,7 @@ Run these from the project folder.
 | `python -m unittest discover tests` | Tests for J/Z, settings, both modes, and window closing (no webcam needed). |
 | `./packaging/build_app.sh` | Build the Mac app (`dist/SignLingo.app`) and `SignLingo-mac.zip` to share. |
 
-## Camera settings and closing the app
+## Settings and closing the app
 
 Click the **gear** in the top-right corner of the menu, Learn Letters or Spell
 Words (next to Main Menu), or press **comma (`,`)**, to open settings. On the
@@ -52,8 +52,11 @@ menu you can also click an option instead of pressing 1 or 2.
 - **Show hand landmarks:** off for a clean camera view. Recognition still runs;
   only the dots are hidden.
 - **Selfie view:** mirrored or unmirrored camera picture.
+- **Tutorial mode:** show or hide the letter-example PNGs in Learn Letters.
+  On by default; turning it off hides only the pictures, not recognition,
+  the target letter, or the progress display. Your choice is saved between launches.
 
-Click a row or press **1/2/3 inside the popup** to change it. ESC closes
+Click a row or press **1/2/3/4 inside the popup** to change it. ESC closes
 settings first; outside settings, ESC or Main Menu goes back to the menu.
 Practice pauses while settings are open. Settings apply right away, are shared
 by both modes, and are saved per user:
@@ -75,7 +78,7 @@ signlingo/                the app's code
   features.py             hand -> 42 numbers, and the k-NN letter guesser
   motion_recognition.py   J and Z from finger movement
   menu_button.py          the clickable "Main Menu" button both modes use
-  settings.py             saved per-user camera settings
+  settings.py             saved per-user camera and tutorial settings
   settings_ui.py          the settings gear and popup
   ui.py                   the full-screen window and the text style every screen shares
   camera.py               the webcam, opened once and shared by the menu and modes

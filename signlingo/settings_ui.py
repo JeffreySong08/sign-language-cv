@@ -14,6 +14,7 @@ ROWS = (
     ("low_power", "Low-power mode", "Limit processing to about 12 FPS"),
     ("show_landmarks", "Show hand landmarks", "Off hides the dots, not recognition"),
     ("selfie", "Selfie view", "Mirror the camera image"),
+    ("tutorial_mode", "Tutorial mode", "Show letter example pictures"),
 )
 GEAR_SIZE = 52     # same height as the Main Menu button
 
@@ -58,7 +59,7 @@ class SettingsPanel:
             return False
         if key == 27:
             self.toggle_open()
-        elif key in (ord("1"), ord("2"), ord("3")):
+        elif ord("1") <= key < ord("1") + len(ROWS):
             self.store.toggle(ROWS[key - ord("1")][0])
             self.revision += 1
         return True  # Modal: keys must not select a mode or focus behind the popup.
@@ -122,6 +123,7 @@ class SettingsPanel:
             enabled = getattr(self.store.values, key)
             ui.text(frame, "ON" if enabled else "OFF", (right_edge - 90, y + 48), 0.9,
                     ui.GREEN if enabled else ui.GREY, 2)
-        footer = self.store.error or "Click a row or press 1 2 3 to change   ESC = close"
+        shortcuts = " ".join(str(index + 1) for index in range(len(ROWS)))
+        footer = self.store.error or f"Click a row or press {shortcuts} to change   ESC = close"
         ui.text(frame, footer, (left + 24, bottom - 22), 0.6, ui.GREY, 2)
         return frame
