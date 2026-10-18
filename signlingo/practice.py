@@ -29,6 +29,8 @@ from signlingo.motion_recognition import MotionRecognizer
 from signlingo.paths import MODEL_PATH
 from signlingo import camera, ui
 from signlingo.menu_button import MENU_BUTTON, draw_menu_button, install
+from signlingo.settings import get_settings
+from signlingo.settings_ui import SettingsPanel, limit_frame_rate, window_is_open
 
 FRAMES_NEEDED = 10      # how many frames in a row must match
 CORRECT_SECONDS = 1.5   # how long "Correct!" stays on screen
@@ -62,7 +64,11 @@ motion_tracker = MotionRecognizer()
 
 cap = camera.open_camera()   # already open when started from the menu
 ui.open_window()
-install()                    # clicks on the Main Menu button
+settings = get_settings()                    # low power, landmarks, selfie view (saved per user)
+settings_panel = SettingsPanel(settings)
+install(settings_panel=settings_panel)       # clicks on Main Menu and the settings gear
+settings_revision = settings_panel.revision
+window_closed = False
 start = time.time()
 last_timestamp_ms = 0
 
@@ -80,10 +86,15 @@ correct_until = 0       # time when the "Correct!" message ends
 score = 0
 
 while cap.isOpened():
+    started = time.monotonic()
+    if settings_revision != settings_panel.revision:   # settings opened or changed: start the hold over
+        settings_revision = settings_panel.revision
+        streak = 0
+        motion_tracker = MotionRecognizer()
     ok, frame = cap.read()
     if not ok:
         break
-    frame = ui.fit(cv2.flip(frame, 1))
+    frame = ui.fit(cv2.flip(frame, 1) if settings.values.selfie else frame)
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -96,10 +107,11 @@ while cap.isOpened():
     guess = None
     hand = result.hand_landmarks[0] if result.hand_landmarks else None
     if hand:
-        ui.hand_dots(frame, hand)
+        if settings.values.show_landmarks:
+            ui.hand_dots(frame, hand)
         guess, _ = guess_letter(hand_to_numbers(hand), examples)
     # The motion tracker watches every frame for a J or Z movement
-    motion_letter = motion_tracker.update(hand, time.monotonic(), w / h)
+    motion_letter = motion_tracker.update(hand if not settings_panel.is_open else None, time.monotonic(), w / h)
     if motion_letter:
         guess = motion_letter
 
@@ -107,7 +119,9 @@ while cap.isOpened():
         # Showing "Correct!" - wait, then the next letter is already set
         ui.centered(frame, "Correct!", h // 2, 2.5, ui.GREEN, 6, boxed=True)
     else:
-        if target in MOTION_LETTERS:
+        if settings_panel.is_open:
+            streak = 0                  # practice pauses while settings are open
+        elif target in MOTION_LETTERS:
             # One finished movement is enough for J and Z
             streak = FRAMES_NEEDED if motion_letter == target else 0
         else:
@@ -144,8 +158,15 @@ while cap.isOpened():
         ui.help_line(frame, help_text)
 
     draw_menu_button(frame)
+    settings_panel.draw(frame, right=MENU_BUTTON["rect"][0])   # gear left of Main Menu
     ui.show(frame)
     key = cv2.waitKey(1) & 0xFF
+    if not window_is_open():          # closed with the window's close button: quit SignLingo
+        window_closed = True
+        break
+    if settings_panel.handle_key(key):   # the settings popup takes the keys while open
+        limit_frame_rate(started, settings.values.low_power)
+        continue
     if key == 27 or MENU_BUTTON["clicked"]:   # ESC or Main Menu: back to the menu
         break
     if key == ord(" "):           # skip this letter
@@ -164,7 +185,10 @@ while cap.isOpened():
         streak = 0
         correct_until = 0
         target_since = time.time()
+    limit_frame_rate(started, settings.values.low_power)
 
 # Back to the menu: free the hand model, keep the camera open for the next mode
 landmarker.close()
+if window_closed:
+    raise SystemExit(0)
 

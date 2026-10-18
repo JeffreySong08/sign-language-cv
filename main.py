@@ -2,8 +2,8 @@
 main.py - starts SignLingo, the downloadable app.
 
 Opens a modern start menu to choose between:
-  [1] Single Letter Practice (signlingo/practice.py)
-  [2] Word Challenge Mode   (signlingo/words.py)
+  [1] Learn Letters (signlingo/practice.py)
+  [2] Spell Words   (signlingo/words.py)
 
 Run from code:    python main.py
 Build the app:    ./packaging/build_app.sh   (makes dist/SignLingo.app on macOS)
@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 
 from signlingo import camera, ui
+from signlingo.settings_ui import SettingsPanel, window_is_open
 
 PACKAGED = hasattr(sys, "_MEIPASS")
 
@@ -69,23 +70,48 @@ def choose_mode():
     ui.centered(canvas, "SignLingo", mid - 160, 3.0, ui.WHITE, 7)
     ui.centered(canvas, "ASL fingerspelling practice", mid - 100, 1.0, ui.GREY, 2)
 
-    # The two modes: the key to press in yellow, the name in white
-    for y, key, name in ((mid + 40, "1", "Single Letter Practice"), (mid + 130, "2", "Word Challenge")):
-        x = (w - ui.text_width(f"{key}   {name}", 1.5, 4)) // 2
+    # The two modes: the key to press in yellow, the name in white. Each line
+    # can also be clicked.
+    options = []
+    for y, key, name, mode in ((mid + 40, "1", "Learn Letters", "signlingo.practice"),
+                               (mid + 130, "2", "Spell Words", "signlingo.words")):
+        width = ui.text_width(f"{key}   {name}", 1.5, 4)
+        x = (w - width) // 2
         ui.text(canvas, key, (x, y), 1.5, ui.YELLOW, 4)
         ui.text(canvas, name, (x + ui.text_width(f"{key}   ", 1.5, 4), y), 1.5, ui.WHITE, 4)
+        options.append(((x - 30, y - 60, x + width + 30, y + 25), mode))
 
     ui.help_line(canvas, "1 or 2 = start   ESC = quit")
 
+    settings_panel = SettingsPanel()
+    clicked = {"mode": None}
+
+    def on_mouse(event, x, y, flags, param):
+        if settings_panel.on_mouse(event, x, y, flags, param):   # gear / popup first
+            return
+        if event == cv2.EVENT_LBUTTONDOWN:
+            for (x1, y1, x2, y2), mode in options:
+                if x1 <= x <= x2 and y1 <= y <= y2:
+                    clicked["mode"] = mode
+
     ui.open_window()
-    ui.show(canvas)
+    cv2.setMouseCallback(ui.WINDOW, on_mouse)
+    ui.show(settings_panel.draw(canvas.copy()))
     cv2.waitKey(1)   # draw the menu now
     # Load the hand-tracking library while the menu is up, so pressing 1 or 2
     # starts quickly. (A key pressed meanwhile still counts.)
     import mediapipe  # noqa: F401
     from mediapipe.tasks.python import vision  # noqa: F401
     while True:
-        key = cv2.waitKey(0) & 0xFF
+        ui.show(settings_panel.draw(canvas.copy()))
+        # Check often instead of waiting for a key, to notice the window being closed
+        key = cv2.waitKey(30) & 0xFF
+        if not window_is_open():
+            return None                   # closed with the window's close button: quit
+        if settings_panel.handle_key(key):
+            continue                      # the settings popup takes the keys while open
+        if clicked["mode"] is not None:
+            return clicked["mode"]
         if key == ord("1"):
             return "signlingo.practice"   # same window carries on into the mode
         elif key == ord("2"):
@@ -95,28 +121,34 @@ def choose_mode():
             return None
 
 
-# In the packaged app, files are unpacked into a temporary folder (_MEIPASS).
-base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-os.chdir(base)
+def main():
+    # In the packaged app, files are unpacked into a temporary folder (_MEIPASS).
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    os.chdir(base)
+    try:
+        if not wait_for_camera():
+            show_message("SignLingo can't use the camera. Allow it in System Settings, "
+                         "Privacy & Security, Camera, then open SignLingo again.")
+            return 1
 
-try:
-    if not wait_for_camera():
-        show_message("SignLingo can't use the camera. Allow it in System Settings, "
-                     "Privacy & Security, Camera, then open SignLingo again.")
-        sys.exit(1)
+        # The menu keeps coming back after a mode ends, so you can pick another
+        # one. A mode returns here with ESC or the Main Menu button; ESC on the
+        # menu itself, or closing the window, quits SignLingo.
+        while True:
+            selected_mode = choose_mode()
+            if selected_mode is None:
+                return 0
+            runpy.run_module(selected_mode, run_name="__main__")
+    except SystemExit:
+        raise  # a mode's window was closed: quit, don't reopen the menu
+    except Exception:
+        traceback.print_exc()
+        show_message("SignLingo hit an error. Details are in SignLingo-log.txt in your home folder.")
+        return 1
+    finally:
+        camera.close_camera()
+        cv2.destroyAllWindows()
 
-    # The menu keeps coming back after a mode ends, so you can pick another
-    # one. A mode returns here with ESC or the Main Menu button; ESC on the
-    # menu itself quits SignLingo.
-    while True:
-        selected_mode = choose_mode()
-        if selected_mode is None:
-            break
-        runpy.run_module(selected_mode, run_name="__main__")
-    camera.close_camera()
-except SystemExit:
-    raise
-except Exception:
-    traceback.print_exc()
-    show_message("SignLingo hit an error. Details are in SignLingo-log.txt in your home folder.")
-    sys.exit(1)
+
+if __name__ == "__main__":
+    raise SystemExit(main())

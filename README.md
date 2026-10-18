@@ -31,26 +31,52 @@ Run these from the project folder.
 
 | Command | What it does |
 |---|---|
-| `python main.py` | **SignLingo**: start menu. `1` Single Letter Practice, `2` Word Challenge, ESC quits. If you finish or leave a mode it comes back to this menu. |
+| `python main.py` | **SignLingo**: start menu. `1` Learn Letters, `2` Spell Words, ESC quits. If you finish or leave a mode it comes back to this menu. |
 | `python -m signlingo.practice` | Letter practice on its own: make the letter shown (a picture in the bottom-right shows how), hold it, get "Correct!". SPACE skips, ESC quits. |
 | `python -m signlingo.practice B` | Focus mode: practice only B (or press a letter key while running; `0` goes back to random). |
-| `python -m signlingo.words` | Word Challenge on its own: spell random words up to 5 letters. |
+| `python -m signlingo.words` | Spell Words on its own: spell random words up to 5 letters. |
 | `python -m tools.collect_data yourname_left` | Record examples one key press at a time into `data/examples_yourname_left.json`. `1` undoes, ESC quits. |
 | `python -m tools.examples_tool count` | How many examples each letter has. |
 | `python -m tools.make_sign_images chart.png` | Cut an ASL alphabet chart into the per-letter pictures in `assets/signs/`. |
-| `python -m unittest discover tests` | Tests for J/Z motion (no webcam needed). |
+| `python -m unittest discover tests` | Tests for J/Z, settings, both modes, and window closing (no webcam needed). |
 | `./packaging/build_app.sh` | Build the Mac app (`dist/SignLingo.app`) and `SignLingo-mac.zip` to share. |
+
+## Camera settings and closing the app
+
+Click the **gear** in the top-right corner of the menu, Learn Letters or Spell
+Words (next to Main Menu), or press **comma (`,`)**, to open settings. On the
+menu you can also click an option instead of pressing 1 or 2.
+
+- **Low-power mode:** caps processing at about 12 FPS. Holds may take a little
+  longer; do J and Z more slowly if needed.
+- **Show hand landmarks:** off for a clean camera view. Recognition still runs;
+  only the dots are hidden.
+- **Selfie view:** mirrored or unmirrored camera picture.
+
+Click a row or press **1/2/3 inside the popup** to change it. ESC closes
+settings first; outside settings, ESC or Main Menu goes back to the menu.
+Practice pauses while settings are open. Settings apply right away, are shared
+by both modes, and are saved per user:
+
+- macOS: `~/Library/Application Support/SignLingo/settings.json`
+- Windows: `%LOCALAPPDATA%/SignLingo/settings.json`
+- Linux: `$XDG_CONFIG_HOME/SignLingo/settings.json` (defaults to `~/.config`)
+
+Closing the window with its **close button quits SignLingo**, rather than
+reopening the menu.
 
 ## Files
 
 ```
 main.py                   SignLingo start menu (the app)
 signlingo/                the app's code
-  practice.py             Single Letter Practice
-  words.py                Word Challenge
+  practice.py             Learn Letters
+  words.py                Spell Words
   features.py             hand -> 42 numbers, and the k-NN letter guesser
   motion_recognition.py   J and Z from finger movement
   menu_button.py          the clickable "Main Menu" button both modes use
+  settings.py             saved per-user camera settings
+  settings_ui.py          the settings gear and popup
   ui.py                   the full-screen window and the text style every screen shares
   camera.py               the webcam, opened once and shared by the menu and modes
   paths.py                where the model and examples live
@@ -74,7 +100,7 @@ docs/plan.md              our mentor's step-by-step guide
 - **Karen** (karenhuang314): the first live classifier: the 42-number
   weighted recipe and k-NN voting (now in `features.py`); recorded the
   webcam examples (`data/examples_karen.json`); the start menu and
-  Word Challenge.
+  Spell Words (first called Word Challenge).
 - **Etinosa** (EOgbeide1): J and Z motion recognition and its tests,
   the motion version of the camera app, the hand model file, and the Kaggle
   examples (`data/examples_dataset.json`).

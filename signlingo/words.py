@@ -14,6 +14,8 @@ from signlingo.motion_recognition import MotionRecognizer
 from signlingo.paths import MODEL_PATH
 from signlingo import camera, ui
 from signlingo.menu_button import MENU_BUTTON, draw_menu_button, install
+from signlingo.settings import get_settings
+from signlingo.settings_ui import SettingsPanel, limit_frame_rate, window_is_open
 
 FRAMES_NEEDED = 8
 WORD_CELEBRATE_SECS = 1.3
@@ -86,7 +88,7 @@ def get_random_word(previous_word=""):
 
 
 def draw_word_hud(frame, current_word, char_idx, target, guess, streak, frames_needed, words_done):
-    """Same look as Single Letter Practice: "Spell: WORD", hold bar, "I see"."""
+    """Same look as Learn Letters: "Spell: WORD", hold bar, "I see"."""
     h = frame.shape[0]
     tip = f"Move: {ui.motion_tip(target)}" if target in MOTION_LETTERS else None
     spell_width = ui.text_width("Spell: ", 2.0, 5) + sum(ui.text_width(ch, 2.0, 5) + 12 for ch in current_word)
@@ -129,7 +131,11 @@ landmarker = vision.HandLandmarker.create_from_options(
 motion_tracker = MotionRecognizer()
 cap = camera.open_camera()   # already open when started from the menu
 ui.open_window()
-install()                    # clicks on the Main Menu button
+settings = get_settings()                    # low power, landmarks, selfie view (saved per user)
+settings_panel = SettingsPanel(settings)
+install(settings_panel=settings_panel)       # clicks on Main Menu and the settings gear
+settings_revision = settings_panel.revision
+window_closed = False
 start_time = time.time()
 last_timestamp_ms = 0
 
@@ -141,10 +147,15 @@ celebrate_until = 0
 just_spelled = ""
 
 while cap.isOpened():
+    started = time.monotonic()
+    if settings_revision != settings_panel.revision:   # settings opened or changed: start the hold over
+        settings_revision = settings_panel.revision
+        streak = 0
+        motion_tracker = MotionRecognizer()
     ok, frame = cap.read()
     if not ok:
         break
-    frame = ui.fit(cv2.flip(frame, 1))
+    frame = ui.fit(cv2.flip(frame, 1) if settings.values.selfie else frame)
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -157,10 +168,11 @@ while cap.isOpened():
     guess = None
     hand = result.hand_landmarks[0] if result.hand_landmarks else None
     if hand:
-        ui.hand_dots(frame, hand)
+        if settings.values.show_landmarks:
+            ui.hand_dots(frame, hand)
         guess, _ = guess_letter(hand_to_numbers(hand), examples)
 
-    motion_letter = motion_tracker.update(hand, time.monotonic(), w / h)
+    motion_letter = motion_tracker.update(hand if not settings_panel.is_open else None, time.monotonic(), w / h)
     if motion_letter:
         guess = motion_letter
 
@@ -169,7 +181,9 @@ while cap.isOpened():
     if now < celebrate_until:
         frame = draw_success_card(frame, just_spelled)
     else:
-        if target in MOTION_LETTERS:
+        if settings_panel.is_open:
+            streak = 0                  # spelling pauses while settings are open
+        elif target in MOTION_LETTERS:
             streak = FRAMES_NEEDED if motion_letter == target else 0
         else:
             streak = streak + 1 if guess == target else 0
@@ -196,14 +210,24 @@ while cap.isOpened():
         )
 
     draw_menu_button(frame)
+    settings_panel.draw(frame, right=MENU_BUTTON["rect"][0])   # gear left of Main Menu
     ui.show(frame)
     key = cv2.waitKey(1) & 0xFF
+    if not window_is_open():          # closed with the window's close button: quit SignLingo
+        window_closed = True
+        break
+    if settings_panel.handle_key(key):   # the settings popup takes the keys while open
+        limit_frame_rate(started, settings.values.low_power)
+        continue
     if key == 27 or MENU_BUTTON["clicked"]:   # ESC or Main Menu: back to the menu
         break
     elif key == ord(" "):
         current_word = get_random_word(previous_word=current_word)
         char_idx = 0
         streak = 0
+    limit_frame_rate(started, settings.values.low_power)
 
 # Back to the menu: free the hand model, keep the camera open for the next mode
 landmarker.close()
+if window_closed:
+    raise SystemExit(0)

@@ -15,10 +15,14 @@ from signlingo import ui
 
 MENU_BUTTON_LABEL = "Main Menu"
 MENU_BUTTON = {"rect": (0, 0, 0, 0), "hover": False, "clicked": False}
+_settings_panel = None
 
 
-def install(window_name=ui.WINDOW):
+def install(window_name=ui.WINDOW, settings_panel=None):
     """Start listening for clicks; call after the window is open."""
+    global _settings_panel
+    _settings_panel = settings_panel
+    MENU_BUTTON["rect"] = (0, 0, 0, 0)
     MENU_BUTTON["hover"] = False
     MENU_BUTTON["clicked"] = False
     cv2.setMouseCallback(window_name, on_mouse)
@@ -39,7 +43,10 @@ def draw_menu_button(frame):
 
 
 def on_mouse(event, x, y, flags, param):
-    """Hover highlight and click handling for the Main Menu button."""
+    """Settings consume clicks first so the menu cannot fire behind the popup."""
+    if _settings_panel is not None and _settings_panel.on_mouse(event, x, y, flags, param):
+        MENU_BUTTON["hover"] = False
+        return
     x1, y1, x2, y2 = MENU_BUTTON["rect"]
     inside = x1 <= x <= x2 and y1 <= y <= y2
     MENU_BUTTON["hover"] = inside
