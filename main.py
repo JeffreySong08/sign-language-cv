@@ -87,7 +87,7 @@ def choose_mode():
             return "signlingo.words"
         elif key == 27:
             cv2.destroyAllWindows()
-            sys.exit(0)
+            return None
 
 
 # In the packaged app, files are unpacked into a temporary folder (_MEIPASS).
@@ -100,8 +100,14 @@ try:
                      "Privacy & Security, Camera, then open SignLingo again.")
         sys.exit(1)
 
-    selected_mode = choose_mode()
-    runpy.run_module(selected_mode, run_name="__main__")
+    # The menu keeps coming back after a mode ends, so you can pick another
+    # one. A mode returns here with ESC or the Main Menu button; ESC on the
+    # menu itself quits SignLingo.
+    while True:
+        selected_mode = choose_mode()
+        if selected_mode is None:
+            break
+        runpy.run_module(selected_mode, run_name="__main__")
 except SystemExit:
     raise
 except Exception:

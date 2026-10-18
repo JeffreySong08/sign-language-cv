@@ -31,7 +31,7 @@ Run these from the project folder.
 
 | Command | What it does |
 |---|---|
-| `python main.py` | **SignLingo**: start menu. `1` Single Letter Practice, `2` Word Challenge, ESC quits. |
+| `python main.py` | **SignLingo**: start menu. `1` Single Letter Practice, `2` Word Challenge, ESC quits. If you finish or leave a mode it comes back to this menu. |
 | `python -m signlingo.practice` | Letter practice on its own: make the letter shown, hold it, get "Correct!". SPACE skips, ESC quits. |
 | `python -m signlingo.practice B` | Focus mode: practice only B (or press a letter key while running; `0` goes back to random). |
 | `python -m signlingo.words` | Word Challenge on its own: spell random words up to 5 letters. |
@@ -49,6 +49,7 @@ signlingo/                the app's code
   words.py                Word Challenge
   features.py             hand -> 42 numbers, and the k-NN letter guesser
   motion_recognition.py   J and Z from finger movement
+  menu_button.py          the clickable "Main Menu" button both modes use
   paths.py                where the model and examples live
 models/
   hand_landmarker.task    MediaPipe hand model
