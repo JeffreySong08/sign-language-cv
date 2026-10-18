@@ -64,7 +64,7 @@ motion_tracker = MotionRecognizer()
 
 cap = camera.open_camera()   # already open when started from the menu
 ui.open_window()
-settings = get_settings()                    # low power, landmarks, selfie view (saved per user)
+settings = get_settings()                    # camera and tutorial preferences (saved per user)
 settings_panel = SettingsPanel(settings)
 install(settings_panel=settings_panel)       # clicks on Main Menu and the settings gear
 settings_revision = settings_panel.revision
@@ -142,7 +142,8 @@ while cap.isOpened():
                      ui.text_width(tip, 0.8, 2) if tip else 0)
         ui.top_backdrop(frame, widest, 215 if tip else 175)
         ui.text(frame, f"Make: {target}", (20, 70), 2.0, ui.WHITE, 5)
-        ui.sign_card(frame, target)                 # how to sign it
+        if settings.values.tutorial_mode:
+            ui.sign_card(frame, target)            # optional tutorial picture
         ui.hold_bar(frame, streak, FRAMES_NEEDED)   # fills up as you hold the right sign
         ui.text(frame, f"I see: {seen}", (20, 155), 1.0, ui.YELLOW, 2)
         if tip:

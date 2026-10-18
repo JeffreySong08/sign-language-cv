@@ -1,4 +1,4 @@
-"""Three persistent camera preferences, separate from bundled training data."""
+"""Persistent camera and tutorial preferences, separate from bundled training data."""
 
 from dataclasses import asdict, dataclass
 import json
@@ -13,6 +13,7 @@ class CameraSettings:
     low_power: bool = False
     show_landmarks: bool = True
     selfie: bool = True
+    tutorial_mode: bool = True
 
 
 def settings_path():
